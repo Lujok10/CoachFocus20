@@ -47,17 +47,42 @@ const app = express();
 
 const allowedOrigins = [
   process.env.CLIENT_URL,
+  "https://coach-focus20.vercel.app",
   "http://localhost:5173",
   "http://localhost:5174",
   "http://localhost:5175",
-  "https://coach-focus20.vercel.app",
-].filter(Boolean);
+].filter(Boolean) as string[];
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+  );
+
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+  );
+
+  res.header("Access-Control-Allow-Credentials", "true");
+
+  if (req.method === "OPTIONS") {
+    res.sendStatus(200);
+    return;
+  }
+
+  next();
+});
 
 app.use(
   cors({
     origin(origin, callback) {
-      console.log("CORS origin:", origin);
-
       if (!origin) {
         callback(null, true);
         return;
@@ -70,14 +95,13 @@ app.use(
 
       console.error("Blocked by CORS:", origin);
 
-      callback(null, false);
+      callback(new Error(`Blocked by CORS: ${origin}`));
     },
     credentials: true,
-    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
-app.options("*", cors());
+
+app.use(express.json());
 
 app.use(express.json());
 
