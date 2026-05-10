@@ -1,0 +1,204 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Provider {
+  google
+  microsoft
+  local
+}
+
+enum CalendarPermission {
+  write
+  read_only
+  none
+}
+
+enum FocusBlockStatus {
+  scheduled
+  started
+  completed
+  missed
+  cancelled
+}
+
+enum ActionStatus {
+  applied
+  undone
+  failed
+}
+
+enum ActionType {
+  reserve_block
+  update_focus_block
+  move_flex_event
+  create_suggested_block
+  calendar_reconnect_required
+  focus_block_started
+  notification_sent
+  calendar_permission_changed
+  google_oauth_connected
+  schedule_task
+  undo_task_schedule
+  flex_shift_previewed
+  flex_event_shifted
+  voice_checkin
+  calendar_write_queued
+}
+
+enum LeverCategory {
+  income
+  health
+  family
+  admin
+  learning
+  creative
+}
+
+model User {
+  id                 String              @id @default(cuid())
+  email              String?             @unique
+  name               String?
+
+  timezone           String              @default("America/New_York")
+  provider           Provider            @default(local)
+  calendarConnected  Boolean             @default(false)
+  calendarPermission CalendarPermission  @default(none)
+  protectEnabled     Boolean             @default(true)
+  flexShiftEnabled   Boolean             @default(false)
+  maxMovesPerDay     Int                 @default(1)
+  notificationsEnabled Boolean            @default(false)
+  completedFirstLever Boolean             @default(false)
+  buffersMinutes     Int                 @default(10)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  tasks              Task[]
+  googleConnection   GoogleCalendarConnection?
+  focusBlocks        FocusBlock[]
+  feedback           Feedback[]
+  actions            ActionsLog[]
+  analytics          AnalyticsEvent[]
+  calendarWriteQueue CalendarWriteQueue[]
+  patternProfile     PatternProfile?
+}
+
+model GoogleCalendarConnection {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  googleEmail    String?
+  accessToken    String   @db.Text
+  refreshToken   String?  @db.Text
+  scope          String?  @db.Text
+  expiryDate     BigInt?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model FocusBlock {
+  id              String           @id @default(cuid())
+  userId          String
+  provider        Provider
+  providerEventId String?
+  title           String
+  startIso        DateTime
+  endIso          DateTime
+  createdBy       String           @default("ai")
+  status          FocusBlockStatus @default(scheduled)
+  leverCategory   LeverCategory
+  predictedImpact Int              @default(5)
+  confidence      Int              @default(80)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feedback        Feedback[]
+
+  @@index([userId, startIso])
+}
+
+model Feedback {
+  id           String     @id @default(cuid())
+  userId       String
+  focusBlockId String
+  result       String
+  needleMover  String
+  noteText     String?
+  createdAt    DateTime   @default(now())
+
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  focusBlock   FocusBlock @relation(fields: [focusBlockId], references: [id], onDelete: Cascade)
+}
+
+model ActionsLog {
+  id          String       @id @default(cuid())
+  userId      String
+  actionType  ActionType
+  payload     Json
+  undoPayload Json
+  status      ActionStatus @default(applied)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PatternProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  bestWindows     Json
+  leverRankings   Json
+  frictionSignals Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Task {
+  id              String   @id @default(cuid())
+  userId          String
+  title           String
+  category        String   @default("admin")
+  notes           String?
+  dueDateIso      DateTime?
+  startIso        DateTime?
+  endIso          DateTime?
+  provider        String   @default("local")
+  providerEventId String?
+  status          String   @default("unscheduled")
+  protectAsFocus  Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CalendarWriteQueue {
+  id          String   @id @default(cuid())
+  userId      String
+  actionType  String
+  payload     Json
+  status      String   @default("queued")
+  attempts    Int      @default(0)
+  lastError   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
