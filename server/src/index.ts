@@ -3,9 +3,11 @@ import "dotenv/config";
 import cors from "cors";
 import express from "express";
 import { clerkMiddleware } from "@clerk/express";
+
 import { prisma, ensureDemoUser, ensureUser } from "./db";
 import { validateEnv } from "./env";
 import { getRequestUserId } from "./auth";
+
 import {
   applyFlexShift,
   canSendNotification,
@@ -46,58 +48,53 @@ const CLIENT_URL = env.clientUrl;
 const app = express();
 
 const allowedOrigins = [
+  CLIENT_URL,
   process.env.CLIENT_URL,
+  process.env.FRONTEND_ORIGIN,
   "https://coach-focus20.vercel.app",
+  "https://coach-focus20-hisa908gf-noel-nyirenda-s-projects.vercel.app",
   "http://localhost:5173",
   "http://localhost:5174",
   "http://localhost:5175",
 ].filter(Boolean) as string[];
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
+function isAllowedOrigin(origin?: string) {
+  if (!origin) return true;
 
-  if (origin && allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin);
+  if (allowedOrigins.includes(origin)) {
+    return true;
   }
 
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-  );
+  try {
+    const url = new URL(origin);
 
-  res.header(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-  );
-
-  res.header("Access-Control-Allow-Credentials", "true");
-
-  if (req.method === "OPTIONS") {
-    res.sendStatus(200);
-    return;
+    if (
+      url.protocol === "https:" &&
+      url.hostname.endsWith(".vercel.app")
+    ) {
+      return true;
+    }
+  } catch {
+    return false;
   }
 
-  next();
-});
+  return false;
+}
 
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin) {
-        callback(null, true);
-        return;
-      }
-
-      if (allowedOrigins.includes(origin)) {
+      if (isAllowedOrigin(origin)) {
         callback(null, true);
         return;
       }
 
       console.error("Blocked by CORS:", origin);
-
       callback(new Error(`Blocked by CORS: ${origin}`));
     },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
@@ -144,21 +141,11 @@ app.get("/api/health", async (_req, res) => {
 
 app.get("/api/rules", async (req, res, next) => {
   try {
-    console.log("RULES ROUTE HIT");
-
     const userId = getRequestUserId(req);
-
-    console.log("USER ID:", userId);
-
     await ensureUser(userId);
 
-    const rules = await getRules(userId);
-
-    console.log("RULES:", rules);
-
-    res.json(rules);
+    res.json(await getRules(userId));
   } catch (error) {
-    console.error("RULES ERROR:", error);
     next(error);
   }
 });
@@ -445,169 +432,12 @@ app.use(
   ) => {
     console.error(error);
 
-    res.status(500).json({
-      ok: false,
-      error: error instanceof Error ? error.message : "Unknown server error",
-    });
-  }
-);
+    const statusCode =
+      typeof (error as any)?.statusCode === "number"
+        ? (error as any).statusCode
+        : 500;
 
-
-
-app.post("/api/cron/retry-calendar-writes", async (req, res, next) => {
-  try {
-    const limit = Number(req.body?.limit ?? 10);
-    res.json(await retryCalendarWrites(limit));
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/cron/retry-calendar-writes", async (_req, res, next) => {
-  try {
-    res.json(await retryCalendarWrites(10));
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/google/disconnect", async (_req, res, next) => {
-  try {
-    res.json(await disconnectGoogleCalendar());
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/user/reset-pattern-profile", async (_req, res, next) => {
-  try {
-    res.json(await resetPatternProfile());
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/user/clear-history", async (_req, res, next) => {
-  try {
-    res.json(await clearUserHistory());
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/insights/weekly", async (_req, res, next) => {
-  try {
-    res.json(await getWeeklyInsights());
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/notifications/can-send", async (_req, res, next) => {
-  try {
-    res.json(await canSendNotification());
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/notifications/log-sent", async (req, res, next) => {
-  try {
-    res.json(
-      await logNotificationSent({
-        focusBlockId: req.body?.focusBlockId,
-        type: req.body?.type ?? "pre_block_reminder",
-      })
-    );
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/focus/start", async (req, res, next) => {
-  try {
-    res.json(await startFocusBlock(req.body?.focusBlockId));
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * Task routes
- */
-app.post("/api/tasks", async (req, res, next) => {
-  try {
-    res.json(await createTask(req.body ?? {}));
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/tasks", async (_req, res, next) => {
-  try {
-    res.json(await listTasks());
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/tasks/:taskId/schedule", async (req, res, next) => {
-  try {
-    res.json(await scheduleTask(req.params.taskId, req.body ?? {}));
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/tasks/:taskId/undo", async (req, res, next) => {
-  try {
-    res.json(await undoTaskSchedule(req.params.taskId));
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/flex-shift/preview", async (req, res, next) => {
-  try {
-    res.json(
-      await previewFlexShift({
-        startIso: req.body?.startIso,
-        endIso: req.body?.endIso,
-      })
-    );
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/flex-shift/apply", async (req, res, next) => {
-  try {
-    res.json(
-      await applyFlexShift({
-        eventId: req.body?.eventId,
-        title: req.body?.title,
-        oldStartIso: req.body?.oldStartIso,
-        oldEndIso: req.body?.oldEndIso,
-        newStartIso: req.body?.newStartIso,
-        newEndIso: req.body?.newEndIso,
-        reason: req.body?.reason,
-      })
-    );
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.use(
-  (
-    error: unknown,
-    _req: express.Request,
-    res: express.Response,
-    _next: express.NextFunction
-  ) => {
-    console.error(error);
-
-    res.status(500).json({
+    res.status(statusCode).json({
       ok: false,
       error: error instanceof Error ? error.message : "Unknown server error",
     });
@@ -624,5 +454,3 @@ ensureDemoUser()
     console.error("Failed to start Focus20 API:", error);
     process.exit(1);
   });
-
-
