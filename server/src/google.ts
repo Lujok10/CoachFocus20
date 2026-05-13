@@ -1,43 +1,27 @@
 import { google } from "googleapis";
-import { prisma, DEMO_USER_ID } from "./db";
-import { encryptSecret, decryptSecret } from "./crypto";
+import { prisma, DEMO_USER_ID, ensureDemoUser } from "./db";
 
-const calendarScopes = [
+const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.freebusy",
+  "https://www.googleapis.com/auth/userinfo.email",
+  "https://www.googleapis.com/auth/userinfo.profile",
   "openid",
-  "email",
-  "profile",
 ];
 
-function requiredEnv(name: string) {
-  const value = process.env[name];
-
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-
-  return value;
+function getRedirectUri() {
+  return (
+    process.env.GOOGLE_REDIRECT_URI ||
+    "http://localhost:8787/api/google/callback"
+  );
 }
 
-function encryptedOrEmpty(value: string | null | undefined) {
-  return encryptSecret(value ?? "") ?? "";
-}
-
-function encryptedOrExisting(
-  value: string | null | undefined,
-  existing: string | null | undefined
-) {
-  if (!value) return existing ?? null;
-  return encryptSecret(value) ?? existing ?? null;
-}
-
-export function getOAuthClient() {
-  const clientId = requiredEnv("GOOGLE_CLIENT_ID");
-  const clientSecret = requiredEnv("GOOGLE_CLIENT_SECRET");
-  const redirectUri = requiredEnv("GOOGLE_REDIRECT_URI");
-
-  return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+function getOAuthClient() {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    getRedirectUri()
+  );
 }
 
 export function getGoogleAuthUrl() {
@@ -46,23 +30,17 @@ export function getGoogleAuthUrl() {
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
-    scope: calendarScopes,
+    scope: GOOGLE_SCOPES,
     state: DEMO_USER_ID,
   });
 }
 
 export async function handleGoogleCallback(code: string) {
-  console.log("Google callback hit");
+  await ensureDemoUser();
 
   const oauth2Client = getOAuthClient();
 
   const { tokens } = await oauth2Client.getToken(code);
-  console.log("Received Google tokens", {
-    hasAccessToken: Boolean(tokens.access_token),
-    hasRefreshToken: Boolean(tokens.refresh_token),
-    expiryDate: tokens.expiry_date,
-  });
-
   oauth2Client.setCredentials(tokens);
 
   const oauth2 = google.oauth2({
@@ -71,111 +49,66 @@ export async function handleGoogleCallback(code: string) {
   });
 
   const profile = await oauth2.userinfo.get();
-  console.log("Google profile:", profile.data.email);
-
-  await prisma.user.upsert({
-    where: {
-      id: DEMO_USER_ID,
-    },
-    update: {
-      email: profile.data.email ?? undefined,
-      name: profile.data.name ?? undefined,
-      provider: "google",
-      calendarConnected: true,
-      calendarPermission: "write",
-    },
-    create: {
-      id: DEMO_USER_ID,
-      email: profile.data.email ?? undefined,
-      name: profile.data.name ?? undefined,
-      provider: "google",
-      calendarConnected: true,
-      calendarPermission: "write",
-    },
-  });
-
-  console.log("User saved as Google-connected");
-
-  const existingConnection = await prisma.googleCalendarConnection.findUnique({
-    where: {
-      userId: DEMO_USER_ID,
-    },
-  });
 
   await prisma.googleCalendarConnection.upsert({
-    where: {
-      userId: DEMO_USER_ID,
-    },
-    update: {
-      googleEmail: profile.data.email ?? undefined,
-      accessToken:
-        encryptedOrExisting(tokens.access_token, existingConnection?.accessToken) ??
-        encryptedOrEmpty(""),
-      refreshToken:
-        encryptedOrExisting(
-          tokens.refresh_token,
-          existingConnection?.refreshToken
-        ) ?? undefined,
-      scope: tokens.scope ?? existingConnection?.scope ?? undefined,
-      expiryDate: tokens.expiry_date
-        ? BigInt(tokens.expiry_date)
-        : existingConnection?.expiryDate ?? undefined,
-    },
-    create: {
-      userId: DEMO_USER_ID,
-      googleEmail: profile.data.email ?? undefined,
-      accessToken: encryptedOrEmpty(tokens.access_token),
-      refreshToken: tokens.refresh_token
-        ? encryptedOrEmpty(tokens.refresh_token)
-        : undefined,
-      scope: tokens.scope,
-      expiryDate: tokens.expiry_date ? BigInt(tokens.expiry_date) : undefined,
-    },
-  });
+  where: {
+    userId: DEMO_USER_ID,
+  },
+  update: {
+    accessToken: tokens.access_token ?? undefined,
+    refreshToken: tokens.refresh_token ?? undefined,
+    expiryDate: tokens.expiry_date ?? undefined,
+  },
+  create: {
+    userId: DEMO_USER_ID,
+    accessToken: tokens.access_token ?? "",
+    refreshToken: tokens.refresh_token ?? "",
+    expiryDate: tokens.expiry_date ?? null,
+  },
+});
 
-  console.log("Google connection saved");
+await prisma.user.update({
+  where: { id: DEMO_USER_ID },
+  data: {
+    email: profile.data.email ?? "demo@focus20.local",
+    provider: "google",
+    calendarConnected: true,
+    calendarPermission: "write",
+  },
+});
+
+  return {
+    ok: true,
+    email: profile.data.email,
+  };
 }
 
-export async function getCalendarClient() {
-  const connection = await prisma.googleCalendarConnection.findUnique({
-    where: {
-      userId: DEMO_USER_ID,
+async function getAuthedCalendarClient() {
+  const user = await prisma.user.findUnique({
+    where: { id: DEMO_USER_ID },
+    include: {
+      googleConnection: true,
     },
   });
 
-  if (!connection) {
-    return null;
+  const connection = user?.googleConnection;
+
+  if (
+    !connection?.accessToken &&
+    !connection?.refreshToken
+  ) {
+    throw new Error("Google Calendar is not connected.");
   }
 
   const oauth2Client = getOAuthClient();
 
   oauth2Client.setCredentials({
-    access_token: decryptSecret(connection.accessToken),
-    refresh_token: decryptSecret(connection.refreshToken) ?? undefined,
-    expiry_date: connection.expiryDate ? Number(connection.expiryDate) : undefined,
-  });
-
-  oauth2Client.on("tokens", async (tokens) => {
-    try {
-      await prisma.googleCalendarConnection.update({
-        where: {
-          userId: DEMO_USER_ID,
-        },
-        data: {
-          accessToken:
-            encryptedOrExisting(tokens.access_token, connection.accessToken) ??
-            connection.accessToken,
-          refreshToken:
-            encryptedOrExisting(tokens.refresh_token, connection.refreshToken) ??
-            connection.refreshToken,
-          expiryDate: tokens.expiry_date
-            ? BigInt(tokens.expiry_date)
-            : connection.expiryDate,
-        },
-      });
-    } catch (error) {
-      console.error("Failed to persist refreshed Google tokens", error);
-    }
+    access_token: connection.accessToken ?? undefined,
+    refresh_token: connection.refreshToken ?? undefined,
+    expiry_date:
+  typeof connection.expiryDate === "bigint"
+    ? Number(connection.expiryDate)
+    : connection.expiryDate ?? undefined,
   });
 
   return google.calendar({
@@ -185,13 +118,9 @@ export async function getCalendarClient() {
 }
 
 export async function googleFreeBusy(startIso: string, endIso: string) {
-  const calendar = await getCalendarClient();
+  const calendar = await getAuthedCalendarClient();
 
-  if (!calendar) {
-    return [];
-  }
-
-  const result = await calendar.freebusy.query({
+  const response = await calendar.freebusy.query({
     requestBody: {
       timeMin: startIso,
       timeMax: endIso,
@@ -199,60 +128,71 @@ export async function googleFreeBusy(startIso: string, endIso: string) {
     },
   });
 
-  return result.data.calendars?.primary?.busy ?? [];
+  const busy = response.data.calendars?.primary?.busy ?? [];
+
+  return busy.map((item) => ({
+    start: item.start,
+    end: item.end,
+  }));
 }
 
-export async function googleCreateOrUpdateFocusEvent(params: {
-  existingEventId?: string | null;
+export async function googleCreateOrUpdateFocusEvent(input: {
+  existingEventId?: string;
   title: string;
   startIso: string;
   endIso: string;
   focusBlockId: string;
   leverCategory: string;
 }) {
-  const calendar = await getCalendarClient();
+  const calendar = await getAuthedCalendarClient();
 
-  if (!calendar) {
-    throw new Error("Google Calendar is not connected.");
-  }
-
-  const event = {
-    summary: params.title,
-    description: [
-      "Created by Focus20 AI Deployment Coach.",
-      `focus_block_id=${params.focusBlockId}`,
-      `lever_category=${params.leverCategory}`,
-      "Undo from Focus20 to remove this reservation.",
-    ].join("\n"),
+  const eventBody = {
+    summary: input.title,
+    description:
+      `Created by Focus20 AI Deployment Coach.\n` +
+      `focus_block_id=${input.focusBlockId}\n` +
+      `lever_category=${input.leverCategory}\n` +
+      `Undo from Focus20 to remove this reservation.`,
     start: {
-      dateTime: params.startIso,
+      dateTime: input.startIso,
     },
     end: {
-      dateTime: params.endIso,
+      dateTime: input.endIso,
     },
     transparency: "opaque",
   };
 
-  if (params.existingEventId) {
-    const updated = await calendar.events.patch({
+  if (input.existingEventId) {
+    const response = await calendar.events.update({
       calendarId: "primary",
-      eventId: params.existingEventId,
-      requestBody: event,
+      eventId: input.existingEventId,
+      requestBody: eventBody,
     });
 
-    return updated.data.id ?? params.existingEventId;
+    return response.data.id ?? input.existingEventId;
   }
 
-  const created = await calendar.events.insert({
+  const response = await calendar.events.insert({
     calendarId: "primary",
-    requestBody: event,
+    requestBody: eventBody,
   });
 
-  if (!created.data.id) {
-    throw new Error("Google Calendar did not return an event id.");
+  if (!response.data.id) {
+    throw new Error("Google Calendar event was created without an event ID.");
   }
 
-  return created.data.id;
+  return response.data.id;
+}
+
+export async function googleDeleteEvent(eventId: string) {
+  const calendar = await getAuthedCalendarClient();
+
+  await calendar.events.delete({
+    calendarId: "primary",
+    eventId,
+  });
+
+  return { ok: true };
 }
 
 export async function googleMoveEvent(input: {
@@ -261,47 +201,30 @@ export async function googleMoveEvent(input: {
   endIso: string;
   reason?: string;
 }) {
-  const calendar = await getCalendarClient();
+  const calendar = await getAuthedCalendarClient();
 
-  if (!calendar) {
-    throw new Error("Google Calendar is not connected.");
-  }
-
-  const current = await calendar.events.get({
+  const existing = await calendar.events.get({
     calendarId: "primary",
     eventId: input.eventId,
   });
 
-  const existingDescription = current.data.description ?? "";
-
-  const updated = await calendar.events.patch({
+  const response = await calendar.events.update({
     calendarId: "primary",
     eventId: input.eventId,
     requestBody: {
+      ...existing.data,
       start: {
         dateTime: input.startIso,
       },
       end: {
         dateTime: input.endIso,
       },
-      description: `${existingDescription}\n\nMoved by Focus20: ${
-        input.reason ?? "Flex shift"
+      description: `${existing.data.description ?? ""}\n\nMoved by Focus20. ${
+        input.reason ?? ""
       }`,
     },
   });
 
-  return updated.data.id ?? input.eventId;
+  return response.data.id ?? input.eventId;
 }
 
-export async function googleDeleteEvent(eventId: string) {
-  const calendar = await getCalendarClient();
-
-  if (!calendar) {
-    throw new Error("Google Calendar is not connected.");
-  }
-
-  await calendar.events.delete({
-    calendarId: "primary",
-    eventId,
-  });
-}
