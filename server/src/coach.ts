@@ -1,6 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { queueCalendarWrite } from "./retryQueue";
-import { prisma, DEMO_USER_ID, ensureDemoUser } from "./db";
+import {
+  prisma,
+  DEMO_USER_ID,
+  ensureDemoUser,
+  ensureUser,
+} from "./db";
 import {
   googleCreateOrUpdateFocusEvent,
   googleDeleteEvent,
@@ -345,8 +350,18 @@ export async function trackEvent(
   });
 }
 
-export async function getRules() {
-  const user = await ensureDemoUser();
+export async function getRules(userId: string = DEMO_USER_ID) {
+  let user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!user && userId === DEMO_USER_ID) {
+    user = await ensureDemoUser();
+  }
+
+  if (!user) {
+    user = await ensureUser(userId);
+  }
 
   return {
     userId: user.id,
@@ -366,8 +381,13 @@ export async function getRules() {
   };
 }
 
-export async function updateRules(data: Record<string, unknown>) {
-  await ensureDemoUser();
+export async function updateRules(
+  userId: string = DEMO_USER_ID,
+  data: Record<string, unknown>
+) {
+  if (userId === DEMO_USER_ID) {
+    await ensureDemoUser();
+  }
 
   const permission =
     data.calendarPermission === "read-only"
@@ -375,7 +395,7 @@ export async function updateRules(data: Record<string, unknown>) {
       : data.calendarPermission;
 
   await prisma.user.update({
-    where: { id: DEMO_USER_ID },
+    where: { id: userId },
     data: {
       protectEnabled:
         typeof data.protectEnabled === "boolean"
@@ -390,13 +410,15 @@ export async function updateRules(data: Record<string, unknown>) {
           ? data.notificationsEnabled
           : undefined,
       buffersMinutes:
-        typeof data.buffersMinutes === "number" ? data.buffersMinutes : undefined,
+        typeof data.buffersMinutes === "number"
+          ? data.buffersMinutes
+          : undefined,
       calendarPermission:
         typeof permission === "string" ? (permission as any) : undefined,
     },
   });
 
-  return getRules();
+  return getRules(userId);
 }
 
 function buildPlan(input: {

@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "dev:api": "tsx watch --env-file=.env server/src/index.ts",
-      "start:api": "node dist/server/src/index.js",
-  "build:api": "tsc -p tsconfig.server.json && node -e \"require('fs').mkdirSync('dist/server',{recursive:true}); require('fs').writeFileSync('dist/server/package.json', JSON.stringify({type:'commonjs'}))\"",
+    "start:api": "node dist/server/src/index.js",
+    "build:api": "tsc -p tsconfig.server.json && node -e \"require('fs').mkdirSync('dist/server',{recursive:true}); require('fs').writeFileSync('dist/server/package.json', JSON.stringify({type:'commonjs'}))\"",
     "dev:full": "concurrently \"npm run dev:api\" \"npm run dev\"",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
@@ -16,6 +16,8 @@
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.61.6",
+    "@clerk/express": "^2.1.15",
     "@prisma/client": "6.19.0",
     "@vitejs/plugin-react": "latest",
     "cors": "latest",

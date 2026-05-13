@@ -3,7 +3,7 @@ import { WakePlan } from "../types";
 import { actionsUndo, refreshWakePlan } from "../services/deploymentCoach";
 import { apiRefreshWakePlan, apiUndoAction } from "../services/apiClient";
 import { trackEvent } from "../services/analytics";
-
+import { useAuth } from "@clerk/clerk-react";
 async function refreshPlanWithBackendFallback(force: boolean) {
   try {
     return await apiRefreshWakePlan(force);
@@ -24,15 +24,25 @@ async function undoWithBackendFallback(actionId: string) {
 }
 
 export function useWakePlan() {
+  const { isLoaded, isSignedIn } = useAuth();
+
   const [wakePlan, setWakePlan] = useState<WakePlan | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadPlan = useCallback(async (force = false) => {
+    if (!isLoaded || !isSignedIn) {
+      return;
+    }
+
     setIsLoading(true);
-    const plan = await refreshPlanWithBackendFallback(force);
-    setWakePlan(plan);
-    setIsLoading(false);
-  }, []);
+
+    try {
+      const plan = await refreshPlanWithBackendFallback(force);
+      setWakePlan(plan);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isLoaded, isSignedIn]);
 
   useEffect(() => {
     loadPlan(false);
@@ -40,22 +50,47 @@ export function useWakePlan() {
 
   const undoAction = useCallback(async () => {
     if (!wakePlan) return;
+
     await undoWithBackendFallback(wakePlan.actionId);
     await loadPlan(false);
   }, [wakePlan, loadPlan]);
 
-  const selectAlternative = useCallback(async (index: number) => {
-    if (!wakePlan?.alternatives[index]) return;
-    await loadPlan(true);
-  }, [wakePlan, loadPlan]);
+  const selectAlternative = useCallback(
+    async (index: number) => {
+      if (!wakePlan?.alternatives[index]) return;
 
-  const updateStatus = useCallback((status: WakePlan["status"]) => {
-    if (!wakePlan) return;
-    const updatedPlan = { ...wakePlan, status };
-    setWakePlan(updatedPlan);
-    localStorage.setItem("focus20_wakePlan", JSON.stringify(updatedPlan));
-    if (status === "started") trackEvent("block_started", { focusBlockId: wakePlan.block.id });
-  }, [wakePlan]);
+      await loadPlan(true);
+    },
+    [wakePlan, loadPlan]
+  );
 
-  return { wakePlan, isLoading, undoAction, selectAlternative, updateStatus, refreshPlan: () => loadPlan(true) };
+  const updateStatus = useCallback(
+    (status: WakePlan["status"]) => {
+      if (!wakePlan) return;
+
+      const updatedPlan = { ...wakePlan, status };
+
+      setWakePlan(updatedPlan);
+      localStorage.setItem(
+        "focus20_wakePlan",
+        JSON.stringify(updatedPlan)
+      );
+
+      if (status === "started") {
+        trackEvent("block_started", {
+          focusBlockId: wakePlan.block.id,
+        });
+      }
+    },
+    [wakePlan]
+  );
+
+  return {
+    wakePlan,
+    isLoading,
+    undoAction,
+    selectAlternative,
+    updateStatus,
+    refreshPlan: () => loadPlan(true),
+  };
 }

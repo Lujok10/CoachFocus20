@@ -1,32 +1,107 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@clerk/clerk-react";
+
 import { Calendar } from "./pages/Calendar";
 import { Insights } from "./pages/Insights";
 import { Settings } from "./pages/Settings";
+
 import { Navigation } from "./components/Navigation";
 import { WakeScreen } from "./components/WakeScreen";
 import { DetailsScreen } from "./components/DetailsScreen";
 import { FocusModeOverlay } from "./components/FocusModeOverlay";
 import { VoiceCheckIn } from "./components/VoiceCheckIn";
+
 import { useWakePlan } from "./hooks/useWakePlan";
 import { scheduleFocusReminder } from "./services/notifications";
+import { setClerkTokenProvider } from "./services/apiClient";
 
-export type TabType = "home" | "calendar" | "insights" | "settings";
+export type TabType =
+  | "home"
+  | "calendar"
+  | "insights"
+  | "settings";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabType>("home");
-  const [showDetails, setShowDetails] = useState(false);
-  const [showFocusMode, setShowFocusMode] = useState(false);
-  const [showVoiceCheckIn, setShowVoiceCheckIn] = useState(false);
+  const { getToken, isLoaded, isSignedIn } = useAuth();
 
-  const { wakePlan, isLoading, undoAction, selectAlternative, updateStatus } =
-    useWakePlan();
+  const [authReady, setAuthReady] = useState(false);
+
+  const [activeTab, setActiveTab] =
+    useState<TabType>("home");
+
+  const [showDetails, setShowDetails] =
+    useState(false);
+
+  const [showFocusMode, setShowFocusMode] =
+    useState(false);
+
+  const [showVoiceCheckIn, setShowVoiceCheckIn] =
+    useState(false);
+
+useEffect(() => {
+  if (!isLoaded || !isSignedIn) {
+    return;
+  }
+
+  console.log("SIGNED IN");
+
+  setClerkTokenProvider(async () => {
+    const token = await getToken({
+      template: "focus20",
+    });
+
+    console.log("CUSTOM JWT:", token);
+
+    return token ?? null;
+  });
+
+  setAuthReady(true);
+}, [isLoaded, isSignedIn, getToken]);
+
+  const {
+    wakePlan,
+    isLoading,
+    undoAction,
+    selectAlternative,
+    updateStatus,
+  } = useWakePlan();
 
   useEffect(() => {
-    if (wakePlan) {
+    if (authReady && wakePlan) {
       scheduleFocusReminder(wakePlan);
     }
-  }, [wakePlan?.block?.id]);
+  }, [authReady, wakePlan]);
+
+  if (!isLoaded) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <p className="text-sm text-slate-500">
+          Loading authentication...
+        </p>
+      </div>
+    );
+  }
+
+  if (!isSignedIn) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <p className="text-sm text-slate-500">
+          Please sign in to continue.
+        </p>
+      </div>
+    );
+  }
+
+  if (!authReady) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <p className="text-sm text-slate-500">
+          Preparing Focus20...
+        </p>
+      </div>
+    );
+  }
 
   const handleSwipeUp = () => {
     setShowDetails(true);
@@ -50,50 +125,74 @@ export default function App() {
     setShowDetails(false);
   };
 
-  const handleSelectAlternative = async (index: number) => {
+  const handleSelectAlternative = async (
+    index: number
+  ) => {
     await selectAlternative(index);
   };
 
   return (
     <div className="min-h-screen bg-slate-50">
       <AnimatePresence mode="wait">
-        {activeTab === "home" && !showDetails && (
-          <motion.div
-            key="wake"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-            className="min-h-screen"
-          >
-            <WakeScreen
-              wakePlan={wakePlan}
-              isLoading={isLoading}
-              onSwipeUp={handleSwipeUp}
-              onUndo={handleUndo}
-              onStartFocus={handleStartFocus}
-              onVoiceCheckIn={handleVoiceCheckIn}
-            />
-          </motion.div>
-        )}
+        {activeTab === "home" &&
+          !showDetails && (
+            <motion.div
+              key="wake"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{
+                opacity: 0,
+                y: -20,
+              }}
+              transition={{
+                duration: 0.3,
+              }}
+              className="min-h-screen"
+            >
+              <WakeScreen
+                wakePlan={wakePlan}
+                isLoading={isLoading}
+                onSwipeUp={handleSwipeUp}
+                onUndo={handleUndo}
+                onStartFocus={handleStartFocus}
+                onVoiceCheckIn={
+                  handleVoiceCheckIn
+                }
+              />
+            </motion.div>
+          )}
 
-        {activeTab === "home" && showDetails && (
-          <motion.div
-            key="details"
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 50 }}
-            transition={{ duration: 0.3 }}
-            className="min-h-screen"
-          >
-            <DetailsScreen
-              wakePlan={wakePlan}
-              onBack={handleBack}
-              onUndo={handleUndo}
-              onSelectAlternative={handleSelectAlternative}
-            />
-          </motion.div>
-        )}
+        {activeTab === "home" &&
+          showDetails && (
+            <motion.div
+              key="details"
+              initial={{
+                opacity: 0,
+                y: 50,
+              }}
+              animate={{
+                opacity: 1,
+                y: 0,
+              }}
+              exit={{
+                opacity: 0,
+                y: 50,
+              }}
+              transition={{
+                duration: 0.3,
+              }}
+              className="min-h-screen"
+            >
+              <DetailsScreen
+                wakePlan={wakePlan}
+                onBack={handleBack}
+                onUndo={handleUndo}
+                onSelectAlternative={
+                  handleSelectAlternative
+                }
+              />
+            </motion.div>
+          )}
       </AnimatePresence>
 
       {activeTab !== "home" && (
@@ -104,19 +203,32 @@ export default function App() {
           transition={{ duration: 0.2 }}
           className="min-h-screen pb-24"
         >
-          {activeTab === "calendar" && <Calendar />}
-          {activeTab === "insights" && <Insights />}
-          {activeTab === "settings" && <Settings />}
+          {activeTab === "calendar" && (
+            <Calendar />
+          )}
+
+          {activeTab === "insights" && (
+            <Insights />
+          )}
+
+          {activeTab === "settings" && (
+            <Settings />
+          )}
         </motion.div>
       )}
 
-      <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
+      <Navigation
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
 
       <AnimatePresence>
         {showFocusMode && wakePlan && (
           <FocusModeOverlay
             wakePlan={wakePlan}
-            onClose={() => setShowFocusMode(false)}
+            onClose={() =>
+              setShowFocusMode(false)
+            }
             onComplete={() => {
               setShowFocusMode(false);
               setShowVoiceCheckIn(true);
@@ -126,12 +238,17 @@ export default function App() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {showVoiceCheckIn && wakePlan && (
-          <VoiceCheckIn
-            focusBlockId={wakePlan.block.id}
-            onClose={() => setShowVoiceCheckIn(false)}
-          />
-        )}
+        {showVoiceCheckIn &&
+          wakePlan && (
+            <VoiceCheckIn
+              focusBlockId={
+                wakePlan.block.id
+              }
+              onClose={() =>
+                setShowVoiceCheckIn(false)
+              }
+            />
+          )}
       </AnimatePresence>
     </div>
   );

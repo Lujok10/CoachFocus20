@@ -2,10 +2,10 @@ import "dotenv/config";
 
 import cors from "cors";
 import express from "express";
-
-import { prisma, ensureDemoUser } from "./db";
+import { clerkMiddleware } from "@clerk/express";
+import { prisma, ensureDemoUser, ensureUser } from "./db";
 import { validateEnv } from "./env";
-
+import { getRequestUserId } from "./auth";
 import {
   applyFlexShift,
   canSendNotification,
@@ -103,7 +103,13 @@ app.use(
 
 app.use(express.json());
 
-app.use(express.json());
+app.use(
+  clerkMiddleware({
+    secretKey: process.env.CLERK_SECRET_KEY,
+    publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+    audience: "focus20-api",
+  })
+);
 
 async function getHealthStatus() {
   try {
@@ -136,17 +142,33 @@ app.get("/api/health", async (_req, res) => {
   res.status(health.ok ? 200 : 503).json(health);
 });
 
-app.get("/api/rules", async (_req, res, next) => {
+app.get("/api/rules", async (req, res, next) => {
   try {
-    res.json(await getRules());
+    console.log("RULES ROUTE HIT");
+
+    const userId = getRequestUserId(req);
+
+    console.log("USER ID:", userId);
+
+    await ensureUser(userId);
+
+    const rules = await getRules(userId);
+
+    console.log("RULES:", rules);
+
+    res.json(rules);
   } catch (error) {
+    console.error("RULES ERROR:", error);
     next(error);
   }
 });
 
 app.patch("/api/rules", async (req, res, next) => {
   try {
-    res.json(await updateRules(req.body ?? {}));
+    const userId = getRequestUserId(req);
+    await ensureUser(userId);
+
+    res.json(await updateRules(userId, req.body ?? {}));
   } catch (error) {
     next(error);
   }

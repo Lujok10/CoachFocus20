@@ -1,35 +1,69 @@
 import { CalendarEvent, UserRules, WakePlan } from "../types";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8787";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:8787";
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+let clerkTokenProvider: (() => Promise<string | null>) | null = null;
+
+export function setClerkTokenProvider(provider: () => Promise<string | null>) {
+  clerkTokenProvider = provider;
+}
+
+export async function request<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
+  let token: string | null = null;
+
+  try {
+    if (clerkTokenProvider) {
+      token = await clerkTokenProvider();
+    }
+  } catch (error) {
+    console.error("TOKEN ERROR:", error);
+  }
+
+  console.log("JWT TOKEN VALUE:", token);
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${API_BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json", ...(options.headers ?? {}) },
     ...options,
+    headers: {
+      ...headers,
+      ...(options.headers || {}),
+    },
   });
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `API request failed: ${res.status}`);
+    let message = `API request failed: ${res.status}`;
+
+    try {
+      const body = await res.json();
+      message = body.error || message;
+    } catch {
+      // Ignore non-JSON errors
+    }
+
+    throw new Error(message);
   }
 
   return res.json() as Promise<T>;
 }
 
-export async function apiStartFocusBlock(focusBlockId?: string) {
-  return request("/api/focus/start", {
-    method: "POST",
-    body: JSON.stringify({ focusBlockId }),
-  });
+export async function apiHealth() {
+  return request<{ ok: boolean }>("/health");
 }
 
 export async function getGoogleConnectUrl() {
   const data = await request<{ url: string }>("/api/google/auth-url");
   return data.url;
-}
-
-export async function apiHealth() {
-  return request<{ ok: boolean }>("/health");
 }
 
 export async function apiGetUserRules() {
@@ -46,14 +80,25 @@ export async function apiSaveUserRules(next: Partial<UserRules>) {
 export async function apiRefreshWakePlan(force = false) {
   return request<WakePlan>("/api/wake-plan/refresh", {
     method: "POST",
-    body: JSON.stringify({ forceReserve: force }),
+    body: JSON.stringify({
+      forceReserve: force,
+    }),
+  });
+}
+
+export async function apiStartFocusBlock(focusBlockId?: string) {
+  return request("/api/focus/start", {
+    method: "POST",
+    body: JSON.stringify({ focusBlockId }),
   });
 }
 
 export async function apiUndoAction(actionId: string) {
   return request<{ success: boolean; reason?: string }>(
     `/api/actions/${actionId}/undo`,
-    { method: "POST" }
+    {
+      method: "POST",
+    }
   );
 }
 
@@ -63,10 +108,13 @@ export async function apiVoiceCheckinRecord(input: {
   needleMover: "yes" | "somewhat" | "no" | "unconfirmed";
   noteText?: string;
 }) {
-  return request<{ ok: boolean; feedback: { id: string } }>("/api/voice-checkin", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
+  return request<{ ok: boolean; feedback: { id: string } }>(
+    "/api/voice-checkin",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    }
+  );
 }
 
 export async function apiCanSendNotification() {
@@ -79,47 +127,28 @@ export async function apiLogNotificationSent(input: {
   focusBlockId?: string;
   type: "pre_block_reminder" | "end_of_day_checkin";
 }) {
-  return request<{ ok: boolean; reason?: string }>("/api/notifications/log-sent", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-}
-
-export async function apiCreateTask(input: {
-  title: string;
-  category?: string;
-  notes?: string;
-  startIso?: string;
-  endIso?: string;
-  protectAsFocus?: boolean;
-}) {
-  return request<any>("/api/tasks", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-}
-
-export async function apiScheduleTask(
-  taskId: string,
-  input: {
-    startIso: string;
-    endIso?: string;
-    durationMinutes?: number;
-    addToCalendar?: boolean;
-    protectAsFocus?: boolean;
-  }
-) {
-  return request<any>(`/api/tasks/${taskId}/schedule`, {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
+  return request<{ ok: boolean; reason?: string }>(
+    "/api/notifications/log-sent",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    }
+  );
 }
 
 export async function apiCalendarEvents(startIso: string, endIso: string) {
-  const params = new URLSearchParams({ startIso, endIso });
+  const params = new URLSearchParams({
+    startIso,
+    endIso,
+  });
 
   const events = await request<
-    Array<Omit<CalendarEvent, "start" | "end"> & { start: string; end: string }>
+    Array<
+      Omit<CalendarEvent, "start" | "end"> & {
+        start: string;
+        end: string;
+      }
+    >
   >(`/api/calendar/events?${params}`);
 
   return events.map((event) => ({
@@ -151,6 +180,36 @@ export async function apiWeeklyInsights() {
     }>;
     shareText: string;
   }>("/api/insights/weekly");
+}
+
+export async function apiCreateTask(input: {
+  title: string;
+  category?: string;
+  notes?: string;
+  startIso?: string;
+  endIso?: string;
+  protectAsFocus?: boolean;
+}) {
+  return request<any>("/api/tasks", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function apiScheduleTask(
+  taskId: string,
+  input: {
+    startIso: string;
+    endIso?: string;
+    durationMinutes?: number;
+    addToCalendar?: boolean;
+    protectAsFocus?: boolean;
+  }
+) {
+  return request<any>(`/api/tasks/${taskId}/schedule`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export async function apiPreviewFlexShift(input: {
@@ -198,20 +257,26 @@ export async function apiApplyFlexShift(input: {
 export async function apiDisconnectGoogle() {
   return request<{ ok: boolean; calendarConnected: boolean }>(
     "/api/google/disconnect",
-    { method: "POST" }
+    {
+      method: "POST",
+    }
   );
 }
 
 export async function apiResetPatternProfile() {
   return request<{ ok: boolean; profile: unknown }>(
     "/api/user/reset-pattern-profile",
-    { method: "POST" }
+    {
+      method: "POST",
+    }
   );
 }
 
 export async function apiClearUserHistory() {
   return request<{ ok: boolean; message: string }>(
     "/api/user/clear-history",
-    { method: "POST" }
+    {
+      method: "POST",
+    }
   );
 }
