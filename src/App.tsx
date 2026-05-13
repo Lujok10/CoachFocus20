@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@clerk/clerk-react";
-
+import { SignInButton } from "@clerk/clerk-react";
 import { Calendar } from "./pages/Calendar";
 import { Insights } from "./pages/Insights";
 import { Settings } from "./pages/Settings";
@@ -84,14 +84,22 @@ useEffect(() => {
   }
 
   if (!isSignedIn) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <p className="text-sm text-slate-500">
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50">
+      <div className="text-center">
+        <p className="mb-4 text-sm text-slate-500">
           Please sign in to continue.
         </p>
+
+        <SignInButton mode="modal">
+          <button className="rounded-xl bg-slate-900 px-5 py-2 text-sm font-medium text-white">
+            Sign in
+          </button>
+        </SignInButton>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   if (!authReady) {
     return (
