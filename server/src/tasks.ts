@@ -1,5 +1,8 @@
 import { prisma, DEMO_USER_ID, ensureDemoUser } from "./db";
-import { googleCreateOrUpdateFocusEvent, googleDeleteEvent } from "./google";
+import {
+  googleCreateOrUpdateFocusEvent,
+  googleDeleteEvent,
+} from "./google";
 
 type ScheduleInput = {
   startIso?: string;
@@ -76,12 +79,13 @@ export async function scheduleTask(taskId: string, input: ScheduleInput) {
 
   if (input.addToCalendar) {
     providerEventId = await googleCreateOrUpdateFocusEvent({
+      userId: task.userId,
       existingEventId: task.providerEventId ?? undefined,
       title: input.protectAsFocus ? `Focus 20: ${task.title}` : task.title,
       startIso: start.toISOString(),
       endIso: end.toISOString(),
       focusBlockId: task.id,
-      leverCategory: task.category,
+      leverCategory: task.category ?? "admin",
     });
 
     provider = "google";
@@ -101,7 +105,7 @@ export async function scheduleTask(taskId: string, input: ScheduleInput) {
 
   const action = await prisma.actionsLog.create({
     data: {
-      userId: DEMO_USER_ID,
+      userId: task.userId,
       actionType: "schedule_task",
       payload: {
         taskId,
@@ -137,7 +141,7 @@ export async function undoTaskSchedule(taskId: string) {
   }
 
   if (task.providerEventId) {
-    await googleDeleteEvent(task.providerEventId);
+    await googleDeleteEvent(task.userId, task.providerEventId);
   }
 
   const updated = await prisma.task.update({
@@ -153,7 +157,7 @@ export async function undoTaskSchedule(taskId: string) {
 
   await prisma.actionsLog.create({
     data: {
-      userId: DEMO_USER_ID,
+      userId: task.userId,
       actionType: "undo_task_schedule",
       payload: { taskId },
       undoPayload: { notUndoable: true },

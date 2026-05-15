@@ -67,6 +67,7 @@ export async function retryCalendarWrites(limit = 10) {
       }
 
       const providerEventId = await googleCreateOrUpdateFocusEvent({
+        userId: item.userId,
         existingEventId: payload.existingEventId ?? undefined,
         title: payload.title,
         startIso: payload.startIso,
