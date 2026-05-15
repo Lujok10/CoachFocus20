@@ -61,24 +61,15 @@ const allowedOrigins = [
 function isAllowedOrigin(origin?: string) {
   if (!origin) return true;
 
-  if (allowedOrigins.includes(origin)) {
-    return true;
-  }
+  if (allowedOrigins.includes(origin)) return true;
 
   try {
     const url = new URL(origin);
 
-    if (
-      url.protocol === "https:" &&
-      url.hostname.endsWith(".vercel.app")
-    ) {
-      return true;
-    }
+    return url.protocol === "https:" && url.hostname.endsWith(".vercel.app");
   } catch {
     return false;
   }
-
-  return false;
 }
 
 app.use(
@@ -249,17 +240,23 @@ app.post("/api/analytics/track", async (req, res, next) => {
   }
 });
 
-app.get("/api/google/auth-url", (_req, res, next) => {
+app.get("/api/google/auth-url", (req, res, next) => {
   try {
-    res.json({ url: getGoogleAuthUrl() });
+    const userId = getRequestUserId(req);
+
+    res.json({
+      url: getGoogleAuthUrl(userId),
+    });
   } catch (error) {
     next(error);
   }
 });
 
-app.get("/api/auth/google", (_req, res, next) => {
+app.get("/api/auth/google", (req, res, next) => {
   try {
-    res.redirect(getGoogleAuthUrl());
+    const userId = getRequestUserId(req);
+
+    res.redirect(getGoogleAuthUrl(userId));
   } catch (error) {
     next(error);
   }
@@ -268,13 +265,19 @@ app.get("/api/auth/google", (_req, res, next) => {
 app.get("/api/google/callback", async (req, res, next) => {
   try {
     const code = String(req.query.code ?? "");
+    const userId = String(req.query.state ?? "");
 
     if (!code) {
       res.status(400).send("Missing Google OAuth code.");
       return;
     }
 
-    await handleGoogleCallback(code);
+    if (!userId) {
+      res.status(400).send("Missing Google OAuth state.");
+      return;
+    }
+
+    await handleGoogleCallback(code, userId);
 
     res.redirect(`${CLIENT_URL}?calendar=connected`);
   } catch (error) {
