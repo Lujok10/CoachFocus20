@@ -350,13 +350,29 @@ export async function canSendNotification() {
 }
 
 export async function getRules(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!user) {
+    throw new Error("User not found.");
+  }
+
   return {
-    userId,
-    protectEnabled: true,
-    flexShiftEnabled: false,
-    notificationsEnabled: true,
-    calendarConnected: true,
-    calendarPermission: "write",
+    userId: user.id,
+    provider: user.provider,
+    calendarConnected: user.calendarConnected,
+    calendarPermission:
+      user.calendarPermission === "read_only"
+        ? "read-only"
+        : user.calendarPermission,
+    protectEnabled: user.protectEnabled,
+    flexShiftEnabled: user.flexShiftEnabled,
+    maxMovesPerDay: user.maxMovesPerDay,
+    notificationsEnabled: user.notificationsEnabled,
+    completedFirstLever: user.completedFirstLever,
+    timezone: user.timezone,
+    buffersMinutes: user.buffersMinutes,
   };
 }
 

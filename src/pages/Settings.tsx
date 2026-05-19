@@ -44,6 +44,7 @@ export function Settings() {
   const [googleConnectUrl, setGoogleConnectUrl] = useState("");
   const [isWorking, setIsWorking] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  
 
   useEffect(() => {
     apiGetUserRules()
@@ -65,6 +66,33 @@ export function Settings() {
   getGoogleConnectUrl()
     .then(setGoogleConnectUrl)
     .catch(() => setGoogleConnectUrl(""));
+}, []);
+
+const loadRules = async () => {
+  try {
+    const data = await apiGetUserRules();
+    setRules(data);
+  } catch (error) {
+    console.error("Failed to load rules", error);
+  }
+};
+
+useEffect(() => {
+  loadRules();
+}, []);
+
+useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+
+  if (params.get("calendar") === "connected") {
+    loadRules();
+
+    window.history.replaceState(
+      {},
+      "",
+      window.location.pathname
+    );
+  }
 }, []);
 
   const updateRules = async (next: Partial<UserRules>) => {
