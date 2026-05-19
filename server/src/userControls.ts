@@ -1,14 +1,18 @@
-import { prisma, DEMO_USER_ID, ensureDemoUser } from "./db";
+import { prisma, ensureUser } from "./db";
 
-export async function disconnectGoogleCalendar() {
-  await ensureDemoUser();
+export async function disconnectGoogleCalendar(userId: string) {
+  await ensureUser(userId);
 
   await prisma.googleCalendarConnection.deleteMany({
-    where: { userId: DEMO_USER_ID },
+    where: {
+      userId,
+    },
   });
 
   await prisma.user.update({
-    where: { id: DEMO_USER_ID },
+    where: {
+      id: userId,
+    },
     data: {
       provider: "local",
       calendarConnected: false,
@@ -22,16 +26,18 @@ export async function disconnectGoogleCalendar() {
   };
 }
 
-export async function resetPatternProfile() {
-  await ensureDemoUser();
+export async function resetPatternProfile(userId: string) {
+  await ensureUser(userId);
 
   await prisma.patternProfile.deleteMany({
-    where: { userId: DEMO_USER_ID },
+    where: {
+      userId,
+    },
   });
 
   const profile = await prisma.patternProfile.create({
     data: {
-      userId: DEMO_USER_ID,
+      userId,
       bestWindows: [
         { start: "09:30", end: "10:30", score: 0.92 },
         { start: "11:00", end: "12:00", score: 0.84 },
@@ -57,32 +63,51 @@ export async function resetPatternProfile() {
   };
 }
 
-export async function clearUserHistory() {
-  await ensureDemoUser();
+export async function clearUserHistory(userId: string) {
+  await ensureUser(userId);
 
   await prisma.$transaction([
     prisma.feedback.deleteMany({
-      where: { userId: DEMO_USER_ID },
+      where: {
+        userId,
+      },
     }),
+
     prisma.analyticsEvent.deleteMany({
-      where: { userId: DEMO_USER_ID },
+      where: {
+        userId,
+      },
     }),
+
     prisma.actionsLog.deleteMany({
-      where: { userId: DEMO_USER_ID },
+      where: {
+        userId,
+      },
     }),
+
     prisma.calendarWriteQueue.deleteMany({
-      where: { userId: DEMO_USER_ID },
+      where: {
+        userId,
+      },
     }),
+
     prisma.task.deleteMany({
-      where: { userId: DEMO_USER_ID },
+      where: {
+        userId,
+      },
     }),
+
     prisma.focusBlock.deleteMany({
-      where: { userId: DEMO_USER_ID },
+      where: {
+        userId,
+      },
     }),
   ]);
 
   await prisma.user.update({
-    where: { id: DEMO_USER_ID },
+    where: {
+      id: userId,
+    },
     data: {
       completedFirstLever: false,
     },
@@ -90,6 +115,7 @@ export async function clearUserHistory() {
 
   return {
     ok: true,
-    message: "History cleared. User settings and calendar connection were preserved.",
+    message:
+      "History cleared. User settings and calendar connection were preserved.",
   };
 }

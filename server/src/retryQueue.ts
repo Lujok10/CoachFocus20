@@ -1,7 +1,8 @@
-import { prisma, DEMO_USER_ID, ensureDemoUser } from "./db";
+import { prisma } from "./db";
 import { googleCreateOrUpdateFocusEvent } from "./google";
 
 export async function queueCalendarWrite(input: {
+  userId: string;
   actionType: "create_or_update_focus_event";
   payload: {
     focusBlockId: string;
@@ -13,11 +14,9 @@ export async function queueCalendarWrite(input: {
   };
   error?: unknown;
 }) {
-  await ensureDemoUser();
-
   return prisma.calendarWriteQueue.create({
     data: {
-      userId: DEMO_USER_ID,
+      userId: input.userId,
       actionType: input.actionType,
       payload: input.payload,
       status: "queued",
@@ -33,11 +32,8 @@ export async function queueCalendarWrite(input: {
 }
 
 export async function retryCalendarWrites(limit = 10) {
-  await ensureDemoUser();
-
   const queued = await prisma.calendarWriteQueue.findMany({
     where: {
-      userId: DEMO_USER_ID,
       status: "queued",
       attempts: {
         lt: 5,
@@ -62,19 +58,26 @@ export async function retryCalendarWrites(limit = 10) {
         leverCategory: string;
       };
 
-      if (item.actionType !== "create_or_update_focus_event") {
-        throw new Error(`Unsupported queued action: ${item.actionType}`);
+      if (
+        item.actionType !==
+        "create_or_update_focus_event"
+      ) {
+        throw new Error(
+          `Unsupported queued action: ${item.actionType}`
+        );
       }
 
-      const providerEventId = await googleCreateOrUpdateFocusEvent({
-        userId: item.userId,
-        existingEventId: payload.existingEventId ?? undefined,
-        title: payload.title,
-        startIso: payload.startIso,
-        endIso: payload.endIso,
-        focusBlockId: payload.focusBlockId,
-        leverCategory: payload.leverCategory,
-      });
+      const providerEventId =
+        await googleCreateOrUpdateFocusEvent({
+          userId: item.userId,
+          existingEventId:
+            payload.existingEventId ?? undefined,
+          title: payload.title,
+          startIso: payload.startIso,
+          endIso: payload.endIso,
+          focusBlockId: payload.focusBlockId,
+          leverCategory: payload.leverCategory,
+        });
 
       await prisma.focusBlock.update({
         where: {
@@ -100,6 +103,7 @@ export async function retryCalendarWrites(limit = 10) {
 
       results.push({
         id: item.id,
+        userId: item.userId,
         ok: true,
         providerEventId,
       });
@@ -110,15 +114,25 @@ export async function retryCalendarWrites(limit = 10) {
         },
         data: {
           attempts: item.attempts + 1,
-          lastError: error instanceof Error ? error.message : String(error),
-          status: item.attempts + 1 >= 5 ? "failed" : "queued",
+          lastError:
+            error instanceof Error
+              ? error.message
+              : String(error),
+          status:
+            item.attempts + 1 >= 5
+              ? "failed"
+              : "queued",
         },
       });
 
       results.push({
         id: item.id,
+        userId: item.userId,
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        error:
+          error instanceof Error
+            ? error.message
+            : String(error),
       });
     }
   }

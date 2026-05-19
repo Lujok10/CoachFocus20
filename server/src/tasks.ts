@@ -1,4 +1,4 @@
-import { prisma, DEMO_USER_ID, ensureDemoUser } from "./db";
+import { prisma, ensureUser } from "./db";
 import {
   googleCreateOrUpdateFocusEvent,
   googleDeleteEvent,
@@ -16,16 +16,19 @@ function computeEnd(start: Date, durationMinutes = 60) {
   return new Date(start.getTime() + durationMinutes * 60_000);
 }
 
-export async function createTask(input: {
-  title?: string;
-  category?: string;
-  notes?: string;
-  dueDateIso?: string;
-  startIso?: string;
-  endIso?: string;
-  protectAsFocus?: boolean;
-}) {
-  await ensureDemoUser();
+export async function createTask(
+  userId: string,
+  input: {
+    title?: string;
+    category?: string;
+    notes?: string;
+    dueDateIso?: string;
+    startIso?: string;
+    endIso?: string;
+    protectAsFocus?: boolean;
+  }
+) {
+  await ensureUser(userId);
 
   if (!input.title?.trim()) {
     throw new Error("Task title is required.");
@@ -33,33 +36,53 @@ export async function createTask(input: {
 
   return prisma.task.create({
     data: {
-      userId: DEMO_USER_ID,
+      userId,
       title: input.title.trim(),
       category: input.category ?? "admin",
       notes: input.notes ?? null,
-      dueDateIso: input.dueDateIso ? new Date(input.dueDateIso) : null,
-      startIso: input.startIso ? new Date(input.startIso) : null,
-      endIso: input.endIso ? new Date(input.endIso) : null,
+      dueDateIso: input.dueDateIso
+        ? new Date(input.dueDateIso)
+        : null,
+      startIso: input.startIso
+        ? new Date(input.startIso)
+        : null,
+      endIso: input.endIso
+        ? new Date(input.endIso)
+        : null,
       protectAsFocus: Boolean(input.protectAsFocus),
-      status: input.startIso ? "scheduled" : "unscheduled",
+      status: input.startIso
+        ? "scheduled"
+        : "unscheduled",
     },
   });
 }
 
-export async function listTasks() {
-  await ensureDemoUser();
+export async function listTasks(userId: string) {
+  await ensureUser(userId);
 
   return prisma.task.findMany({
-    where: { userId: DEMO_USER_ID },
-    orderBy: [{ startIso: "asc" }, { createdAt: "desc" }],
+    where: {
+      userId,
+    },
+    orderBy: [
+      { startIso: "asc" },
+      { createdAt: "desc" },
+    ],
   });
 }
 
-export async function scheduleTask(taskId: string, input: ScheduleInput) {
-  await ensureDemoUser();
+export async function scheduleTask(
+  userId: string,
+  taskId: string,
+  input: ScheduleInput
+) {
+  await ensureUser(userId);
 
-  const task = await prisma.task.findUnique({
-    where: { id: taskId },
+  const task = await prisma.task.findFirst({
+    where: {
+      id: taskId,
+      userId,
+    },
   });
 
   if (!task) {
@@ -79,7 +102,7 @@ export async function scheduleTask(taskId: string, input: ScheduleInput) {
 
   if (input.addToCalendar) {
     providerEventId = await googleCreateOrUpdateFocusEvent({
-      userId: task.userId,
+      userId,
       existingEventId: task.providerEventId ?? undefined,
       title: input.protectAsFocus ? `Focus 20: ${task.title}` : task.title,
       startIso: start.toISOString(),
@@ -92,7 +115,9 @@ export async function scheduleTask(taskId: string, input: ScheduleInput) {
   }
 
   const updated = await prisma.task.update({
-    where: { id: taskId },
+    where: {
+      id: taskId,
+    },
     data: {
       startIso: start,
       endIso: end,
@@ -105,7 +130,7 @@ export async function scheduleTask(taskId: string, input: ScheduleInput) {
 
   const action = await prisma.actionsLog.create({
     data: {
-      userId: task.userId,
+      userId,
       actionType: "schedule_task",
       payload: {
         taskId,
@@ -129,11 +154,17 @@ export async function scheduleTask(taskId: string, input: ScheduleInput) {
   };
 }
 
-export async function undoTaskSchedule(taskId: string) {
-  await ensureDemoUser();
+export async function undoTaskSchedule(
+  userId: string,
+  taskId: string
+) {
+  await ensureUser(userId);
 
-  const task = await prisma.task.findUnique({
-    where: { id: taskId },
+  const task = await prisma.task.findFirst({
+    where: {
+      id: taskId,
+      userId,
+    },
   });
 
   if (!task) {
@@ -141,11 +172,13 @@ export async function undoTaskSchedule(taskId: string) {
   }
 
   if (task.providerEventId) {
-    await googleDeleteEvent(task.userId, task.providerEventId);
+    await googleDeleteEvent(userId, task.providerEventId);
   }
 
   const updated = await prisma.task.update({
-    where: { id: taskId },
+    where: {
+      id: taskId,
+    },
     data: {
       provider: "local",
       providerEventId: null,
@@ -157,7 +190,7 @@ export async function undoTaskSchedule(taskId: string) {
 
   await prisma.actionsLog.create({
     data: {
-      userId: task.userId,
+      userId,
       actionType: "undo_task_schedule",
       payload: { taskId },
       undoPayload: { notUndoable: true },

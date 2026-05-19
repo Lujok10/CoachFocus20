@@ -291,9 +291,11 @@ app.get("/api/google/callback", async (req, res, next) => {
   }
 });
 
-app.get("/api/insights/weekly", async (_req, res, next) => {
+app.get("/api/insights/weekly", async (req, res, next) => {
   try {
-    res.json(await getWeeklyInsights());
+    const userId = getRequestUserId(req);
+
+    res.json(await getWeeklyInsights(userId));
   } catch (error) {
     next(error);
   }
@@ -330,15 +332,21 @@ app.post("/api/focus/start", async (req, res, next) => {
 
 app.post("/api/tasks", async (req, res, next) => {
   try {
-    res.json(await createTask(req.body ?? {}));
+    const userId = getRequestUserId(req);
+
+    res.json(
+      await createTask(userId, req.body ?? {})
+    );
   } catch (error) {
     next(error);
   }
 });
 
-app.get("/api/tasks", async (_req, res, next) => {
+app.get("/api/tasks", async (req, res, next) => {
   try {
-    res.json(await listTasks());
+    const userId = getRequestUserId(req);
+
+    res.json(await listTasks(userId));
   } catch (error) {
     next(error);
   }
@@ -346,7 +354,15 @@ app.get("/api/tasks", async (_req, res, next) => {
 
 app.post("/api/tasks/:taskId/schedule", async (req, res, next) => {
   try {
-    res.json(await scheduleTask(req.params.taskId, req.body ?? {}));
+    const userId = getRequestUserId(req);
+
+res.json(
+  await scheduleTask(
+    userId,
+    req.params.taskId,
+    req.body ?? {}
+  )
+);
   } catch (error) {
     next(error);
   }
@@ -354,7 +370,11 @@ app.post("/api/tasks/:taskId/schedule", async (req, res, next) => {
 
 app.post("/api/tasks/:taskId/undo", async (req, res, next) => {
   try {
-    res.json(await undoTaskSchedule(req.params.taskId));
+    const userId = getRequestUserId(req);
+
+res.json(
+  await undoTaskSchedule(userId, req.params.taskId)
+);
   } catch (error) {
     next(error);
   }
@@ -408,25 +428,28 @@ app.get("/api/cron/retry-calendar-writes", async (_req, res, next) => {
   }
 });
 
-app.post("/api/google/disconnect", async (_req, res, next) => {
+app.post("/api/google/disconnect", async (req, res, next) => {
   try {
-    res.json(await disconnectGoogleCalendar());
+    const userId = getRequestUserId(req);
+    res.json(await disconnectGoogleCalendar(userId));
   } catch (error) {
     next(error);
   }
 });
 
-app.post("/api/user/reset-pattern-profile", async (_req, res, next) => {
+app.post("/api/user/reset-pattern-profile", async (req, res, next) => {
   try {
-    res.json(await resetPatternProfile());
+    const userId = getRequestUserId(req);
+res.json(await resetPatternProfile(userId));
   } catch (error) {
     next(error);
   }
 });
 
-app.post("/api/user/clear-history", async (_req, res, next) => {
+app.post("/api/user/clear-history", async (req, res, next) => {
   try {
-    res.json(await clearUserHistory());
+    const userId = getRequestUserId(req);
+res.json(await clearUserHistory(userId));
   } catch (error) {
     next(error);
   }

@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { prisma, DEMO_USER_ID, ensureDemoUser } from "./db";
+import { prisma, ensureUser } from "./db";
 
 const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
@@ -28,19 +28,30 @@ export type PlannerOutput = {
   confidence: number;
 };
 
-export async function buildPlannerInput(): Promise<PlannerInput> {
-  await ensureDemoUser();
+const allowedCategories = [
+  "income",
+  "health",
+  "family",
+  "admin",
+  "learning",
+  "creative",
+];
+
+export async function buildPlannerInput(
+  userId: string
+): Promise<PlannerInput> {
+  await ensureUser(userId);
 
   const user = await prisma.user.findUnique({
-    where: { id: DEMO_USER_ID },
+    where: { id: userId },
   });
 
   const patternProfile = await prisma.patternProfile.findUnique({
-    where: { userId: DEMO_USER_ID },
+    where: { userId },
   });
 
   const recentFeedback = await prisma.feedback.findMany({
-    where: { userId: DEMO_USER_ID },
+    where: { userId },
     include: { focusBlock: true },
     orderBy: { createdAt: "desc" },
     take: 20,
@@ -54,19 +65,24 @@ export async function buildPlannerInput(): Promise<PlannerInput> {
   const today = new Date();
 
   const availableWindows = bestWindows.map((window) => {
-    const [startHour, startMinute] = window.start.split(":").map(Number);
-    const [endHour, endMinute] = window.end.split(":").map(Number);
+    const [startHour, startMinute] = String(window.start)
+      .split(":")
+      .map(Number);
+
+    const [endHour, endMinute] = String(window.end)
+      .split(":")
+      .map(Number);
 
     const start = new Date(today);
-    start.setHours(startHour, startMinute, 0, 0);
+    start.setHours(startHour || 9, startMinute || 30, 0, 0);
 
     const end = new Date(today);
-    end.setHours(endHour, endMinute, 0, 0);
+    end.setHours(endHour || 10, endMinute || 30, 0, 0);
 
     return {
       startIso: start.toISOString(),
       endIso: end.toISOString(),
-      score: window.score,
+      score: Number(window.score) || 0.8,
     };
   });
 
@@ -78,8 +94,10 @@ export async function buildPlannerInput(): Promise<PlannerInput> {
   };
 }
 
-export async function runLocalPlanner(): Promise<PlannerOutput> {
-  const input = await buildPlannerInput();
+export async function runLocalPlanner(
+  userId: string
+): Promise<PlannerOutput> {
+  const input = await buildPlannerInput(userId);
 
   const rankings =
     (input.patternProfile?.leverRankings as Array<{
@@ -88,10 +106,17 @@ export async function runLocalPlanner(): Promise<PlannerOutput> {
     }>) ?? [];
 
   const topCategory =
-    [...rankings].sort((a, b) => b.score - a.score)[0]?.category ?? "income";
+    [...rankings].sort((a, b) => b.score - a.score)[0]?.category ??
+    "income";
+
+  const safeCategory = allowedCategories.includes(topCategory)
+    ? topCategory
+    : "income";
 
   const positiveSignals = input.recentFeedback.filter(
-    (f) => f.result === "crushed" && f.needleMover === "yes"
+    (feedback) =>
+      feedback.result === "crushed" &&
+      feedback.needleMover === "yes"
   );
 
   const confidence = Math.min(95, 70 + positiveSignals.length * 3);
@@ -106,8 +131,8 @@ export async function runLocalPlanner(): Promise<PlannerOutput> {
   };
 
   return {
-    leverTitle: leverMap[topCategory] ?? leverMap.income,
-    leverCategory: topCategory,
+    leverTitle: leverMap[safeCategory] ?? leverMap.income,
+    leverCategory: safeCategory,
     why:
       "This matches your strongest recent pattern based on completed blocks, needle-mover feedback, and time-window fit.",
     plan: [
@@ -124,28 +149,27 @@ export async function runLocalPlanner(): Promise<PlannerOutput> {
 }
 
 function sanitizePlannerOutput(output: PlannerOutput): PlannerOutput {
-  const allowedCategories = [
-    "income",
-    "health",
-    "family",
-    "admin",
-    "learning",
-    "creative",
-  ];
-
   const category = allowedCategories.includes(output.leverCategory)
     ? output.leverCategory
     : "admin";
 
   return {
-    leverTitle: output.leverTitle?.slice(0, 90) || "protect your highest-leverage task",
+    leverTitle:
+      output.leverTitle?.slice(0, 90) ||
+      "protect your highest-leverage task",
     leverCategory: category,
     why:
       output.why?.slice(0, 180) ||
       "This is the best current needle-mover based on your recent patterns.",
     plan: Array.isArray(output.plan)
-      ? output.plan.slice(0, 3).map((item) => String(item).slice(0, 100))
-      : ["Start the task.", "Protect the block.", "Capture the next action."],
+      ? output.plan
+          .slice(0, 3)
+          .map((item) => String(item).slice(0, 100))
+      : [
+          "Start the task.",
+          "Protect the block.",
+          "Capture the next action.",
+        ],
     alternatives: Array.isArray(output.alternatives)
       ? output.alternatives.slice(0, 2).map((alt) => ({
           title: String(alt.title ?? "alternate focus task").slice(0, 90),
@@ -154,16 +178,21 @@ function sanitizePlannerOutput(output: PlannerOutput): PlannerOutput {
             : "admin",
         }))
       : [],
-    confidence: Math.max(40, Math.min(95, Number(output.confidence) || 70)),
+    confidence: Math.max(
+      40,
+      Math.min(95, Number(output.confidence) || 70)
+    ),
   };
 }
 
-export async function runAiPlanner(): Promise<PlannerOutput> {
+export async function runAiPlanner(
+  userId: string
+): Promise<PlannerOutput> {
   if (!openai) {
-    return runLocalPlanner();
+    return runLocalPlanner(userId);
   }
 
-  const input = await buildPlannerInput();
+  const input = await buildPlannerInput(userId);
 
   try {
     const response = await openai.responses.create({
@@ -179,12 +208,12 @@ export async function runAiPlanner(): Promise<PlannerOutput> {
           content: JSON.stringify({
             rules: input.rules,
             patternProfile: input.patternProfile,
-            recentFeedback: input.recentFeedback.map((f) => ({
-              result: f.result,
-              needleMover: f.needleMover,
-              category: f.focusBlock?.leverCategory,
-              startIso: f.focusBlock?.startIso,
-              status: f.focusBlock?.status,
+            recentFeedback: input.recentFeedback.map((feedback) => ({
+              result: feedback.result,
+              needleMover: feedback.needleMover,
+              category: feedback.focusBlock?.leverCategory,
+              startIso: feedback.focusBlock?.startIso,
+              status: feedback.focusBlock?.status,
             })),
             availableWindows: input.availableWindows,
           }),
@@ -210,7 +239,7 @@ export async function runAiPlanner(): Promise<PlannerOutput> {
               leverTitle: { type: "string" },
               leverCategory: {
                 type: "string",
-                enum: ["income", "health", "family", "admin", "learning", "creative"],
+                enum: allowedCategories,
               },
               why: { type: "string" },
               plan: {
@@ -231,14 +260,7 @@ export async function runAiPlanner(): Promise<PlannerOutput> {
                     title: { type: "string" },
                     category: {
                       type: "string",
-                      enum: [
-                        "income",
-                        "health",
-                        "family",
-                        "admin",
-                        "learning",
-                        "creative",
-                      ],
+                      enum: allowedCategories,
                     },
                   },
                 },
@@ -254,12 +276,15 @@ export async function runAiPlanner(): Promise<PlannerOutput> {
       },
     });
 
-    const raw = response.output_text;
-    const parsed = JSON.parse(raw) as PlannerOutput;
+    const parsed = JSON.parse(response.output_text) as PlannerOutput;
 
     return sanitizePlannerOutput(parsed);
   } catch (error) {
-    console.error("AI planner failed. Falling back to local planner.", error);
-    return runLocalPlanner();
+    console.error(
+      "AI planner failed. Falling back to local planner.",
+      error
+    );
+
+    return runLocalPlanner(userId);
   }
 }
