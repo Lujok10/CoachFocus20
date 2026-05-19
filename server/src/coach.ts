@@ -451,48 +451,56 @@ export async function refreshWakePlan(userId: string, force = false) {
     },
   });
 
-  return {
-    id: `wake_${block.id}`,
-    sentence: `${block.title} — ${block.startIso.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    })} to ${block.endIso.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    })}.`,
-    why: "This is your next protected execution block.",
-    confidenceLevel: "high",
+return {
+  id: `wake_${block.id}`,
 
-    block: {
-      id: block.id,
-      userId: block.userId,
-      title: block.title,
-      startIso: block.startIso.toISOString(),
-      endIso: block.endIso.toISOString(),
-      provider: block.provider,
-      providerEventId: block.providerEventId,
-      window: block.startIso.getHours() < 12 ? "AM" : "PM",
-      status: block.status,
-      leverCategory: block.leverCategory,
-      predictedImpact: block.predictedImpact,
-      confidence: block.confidence,
-    },
+  sentence: `${block.title} — ${block.startIso.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  })} to ${block.endIso.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}.`,
 
-    alternatives: [
-      {
-        id: "alt_admin",
-        title: "Clear priority admin task",
-      },
-      {
-        id: "alt_learning",
-        title: "Review learning backlog",
-      },
-    ],
+  lever: {
+    title: block.title,
+    category: block.leverCategory,
+    predictedImpact: block.predictedImpact,
+  },
 
+  why: "This is your next protected execution block.",
+  confidenceLevel: "high",
+
+  block: {
+    id: block.id,
+    userId: block.userId,
+    title: block.title,
+    startIso: block.startIso.toISOString(),
+    endIso: block.endIso.toISOString(),
+    provider: block.provider,
+    providerEventId: block.providerEventId,
+    window: block.startIso.getHours() < 12 ? "AM" : "PM",
     status: block.status,
-    reserved: block.status === "scheduled",
-    actionId: action.id,
-  };
+    leverCategory: block.leverCategory,
+    predictedImpact: block.predictedImpact,
+    confidence: block.confidence,
+  },
+
+  alternatives: [
+    {
+      id: "alt_admin",
+      title: "Clear priority admin task",
+    },
+    {
+      id: "alt_learning",
+      title: "Review learning backlog",
+    },
+  ],
+
+  status: block.status,
+  reserved: block.status === "scheduled",
+  actionId: action.id,
+};
 }
 
 export async function startFocusBlock(
