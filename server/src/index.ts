@@ -152,9 +152,12 @@ app.patch("/api/rules", async (req, res, next) => {
   }
 });
 
-app.get("/api/wake-plan", async (_req, res, next) => {
+app.get("/api/wake-plan", async (req, res, next) => {
   try {
-    res.json(await refreshWakePlan(false));
+    const userId = getRequestUserId(req);
+    await ensureUser(userId);
+
+    res.json(await refreshWakePlan(userId, false));
   } catch (error) {
     next(error);
   }
@@ -162,7 +165,10 @@ app.get("/api/wake-plan", async (_req, res, next) => {
 
 app.post("/api/wake-plan/refresh", async (req, res, next) => {
   try {
-    res.json(await refreshWakePlan(Boolean(req.body?.forceReserve)));
+    const userId = getRequestUserId(req);
+    await ensureUser(userId);
+
+    res.json(await refreshWakePlan(userId, Boolean(req.body?.forceReserve)));
   } catch (error) {
     next(error);
   }

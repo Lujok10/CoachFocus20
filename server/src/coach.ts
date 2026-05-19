@@ -395,14 +395,103 @@ export async function recordCheckin(input: any) {
   };
 }
 
-export async function refreshWakePlan(force = false) {
-  return {
-    id: "demo-plan",
-    sentence: "Focus on your highest leverage task.",
-    force,
-    block: {
-      id: "demo-block",
+export async function refreshWakePlan(userId: string, force = false) {
+  await ensureUser(userId);
+
+  const now = new Date();
+  const start = new Date(now.getTime() + 15 * 60 * 1000);
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+
+  let block = await prisma.focusBlock.findFirst({
+    where: {
+      userId,
+      status: {
+        not: "cancelled",
+      },
+      startIso: {
+        gte: now,
+      },
     },
+    orderBy: {
+      startIso: "asc",
+    },
+  });
+
+  if (!block || force) {
+    block = await prisma.focusBlock.create({
+      data: {
+        userId,
+        title: "Deep Work Session",
+        provider: "local",
+        providerEventId: null,
+        startIso: start,
+        endIso: end,
+        status: "scheduled",
+        leverCategory: "admin",
+        predictedImpact: 4,
+        confidence: 80,
+      },
+    });
+  }
+
+  const action = await prisma.actionsLog.create({
+    data: {
+      userId,
+      actionType: "reserve_block",
+      payload: {
+        blockId: block.id,
+        title: block.title,
+        startIso: block.startIso.toISOString(),
+        endIso: block.endIso.toISOString(),
+      },
+      undoPayload: {
+        focusBlockId: block.id,
+        operation: "cancel_focus_block",
+      },
+    },
+  });
+
+  return {
+    id: `wake_${block.id}`,
+    sentence: `${block.title} — ${block.startIso.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    })} to ${block.endIso.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    })}.`,
+    why: "This is your next protected execution block.",
+    confidenceLevel: "high",
+
+    block: {
+      id: block.id,
+      userId: block.userId,
+      title: block.title,
+      startIso: block.startIso.toISOString(),
+      endIso: block.endIso.toISOString(),
+      provider: block.provider,
+      providerEventId: block.providerEventId,
+      window: block.startIso.getHours() < 12 ? "AM" : "PM",
+      status: block.status,
+      leverCategory: block.leverCategory,
+      predictedImpact: block.predictedImpact,
+      confidence: block.confidence,
+    },
+
+    alternatives: [
+      {
+        id: "alt_admin",
+        title: "Clear priority admin task",
+      },
+      {
+        id: "alt_learning",
+        title: "Review learning backlog",
+      },
+    ],
+
+    status: block.status,
+    reserved: block.status === "scheduled",
+    actionId: action.id,
   };
 }
 
