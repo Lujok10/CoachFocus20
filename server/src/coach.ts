@@ -485,7 +485,34 @@ return {
   },
 
   why: "This is your next protected execution block.",
+
+  plan: [
+    "Open the task or workspace.",
+    "Work for the protected focus block.",
+    "Capture the next action before stopping.",
+  ],
+
+  alternatives: [
+    {
+      title: "Clear one priority admin task",
+      time: "Later today",
+      category: "admin",
+    },
+    {
+      title: "Review learning backlog",
+      time: "Tomorrow morning",
+      category: "learning",
+    },
+  ],
+
+  timeLeak: {
+    title: "Unprotected calendar time",
+    minutes: 30,
+    fixAction: "Protect this block before distractions take over.",
+  },
+
   confidenceLevel: "high",
+  confidence: block.confidence,
 
   block: {
     id: block.id,
@@ -500,22 +527,28 @@ return {
     leverCategory: block.leverCategory,
     predictedImpact: block.predictedImpact,
     confidence: block.confidence,
+    startTime: block.startIso.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    endTime: block.endIso.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    durationMinutes: Math.round(
+      (block.endIso.getTime() - block.startIso.getTime()) / 60000
+    ),
+    date: block.startIso.toISOString().split("T")[0],
   },
-
-  alternatives: [
-    {
-      id: "alt_admin",
-      title: "Clear priority admin task",
-    },
-    {
-      id: "alt_learning",
-      title: "Review learning backlog",
-    },
-  ],
 
   status: block.status,
   reserved: block.status === "scheduled",
+  isReserved: block.status === "scheduled",
+  reservationStatus: block.status === "scheduled" ? "reserved" : "suggested",
+  calendarReconnectRequired: false,
+  readOnlyCalendar: false,
   actionId: action.id,
+  undoToken: action.id,
 };
 }
 
