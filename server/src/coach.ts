@@ -45,16 +45,7 @@ export function getOAuthClient() {
   );
 }
 
-export function getGoogleAuthUrl(userId: string) {
-  const oauth2Client = getOAuthClient();
 
-  return oauth2Client.generateAuthUrl({
-    access_type: "offline",
-    prompt: "consent",
-    scope: GOOGLE_SCOPES,
-    state: userId,
-  });
-}
 
 export async function handleGoogleCallback(
   code: string,
