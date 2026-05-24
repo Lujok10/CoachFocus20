@@ -2,11 +2,12 @@ import { google } from "googleapis";
 import { prisma, ensureUser } from "./db";
 
 const GOOGLE_SCOPES = [
-  "https://www.googleapis.com/auth/calendar.events",
-  "https://www.googleapis.com/auth/calendar.freebusy",
+  "openid",
   "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/userinfo.profile",
-  "openid",
+  "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/calendar.freebusy",
 ];
 
 function getRedirectUri() {
@@ -27,9 +28,12 @@ function getOAuthClient() {
 export function getGoogleAuthUrl(userId: string) {
   const oauth2Client = getOAuthClient();
 
+  console.log("GOOGLE_SCOPES USED:", GOOGLE_SCOPES);
+
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
+    include_granted_scopes: false,
     scope: GOOGLE_SCOPES,
     state: userId,
   });

@@ -10,32 +10,53 @@ function startOfWeek() {
   return start;
 }
 
+function minutesBetween(start?: Date | null, end?: Date | null) {
+  if (!start || !end) return 0;
+
+  return Math.max(
+    0,
+    Math.round((end.getTime() - start.getTime()) / 60000)
+  );
+}
+
 export async function getWeeklyInsights(userId: string) {
   const now = new Date();
   const weekStart = startOfWeek();
 
-  const blocks = await prisma.focusBlock.findMany({
-    where: {
-      userId,
-      startIso: {
-        gte: weekStart,
-        lte: now,
+  const [blocks, feedback, tasks] = await Promise.all([
+    prisma.focusBlock.findMany({
+      where: {
+        userId,
+        startIso: {
+          gte: weekStart,
+          lte: now,
+        },
       },
-    },
-  });
+    }),
 
-  const feedback = await prisma.feedback.findMany({
-    where: {
-      userId,
-      createdAt: {
-        gte: weekStart,
-        lte: now,
+    prisma.feedback.findMany({
+      where: {
+        userId,
+        createdAt: {
+          gte: weekStart,
+          lte: now,
+        },
       },
-    },
-    include: {
-      focusBlock: true,
-    },
-  });
+      include: {
+        focusBlock: true,
+      },
+    }),
+
+    prisma.task.findMany({
+      where: {
+        userId,
+        startIso: {
+          gte: weekStart,
+          lte: now,
+        },
+      },
+    }),
+  ]);
 
   const completedBlocks = blocks.filter(
     (block) => block.status === "completed"
@@ -45,39 +66,59 @@ export async function getWeeklyInsights(userId: string) {
     (block) => block.status === "missed"
   );
 
-  const protectedMinutes = blocks.reduce((total, block) => {
-    return (
-      total +
-      Math.round(
-        (block.endIso.getTime() - block.startIso.getTime()) /
-          60000
-      )
-    );
-  }, 0);
+  const scheduledTasks = tasks.filter(
+    (task) => task.startIso && task.endIso
+  );
 
-  const completedMinutes = completedBlocks.reduce(
-    (total, block) => {
-      return (
-        total +
-        Math.round(
-          (block.endIso.getTime() -
-            block.startIso.getTime()) /
-            60000
-        )
-      );
-    },
+  const completedTasks = tasks.filter(
+    (task) => task.status === "completed"
+  );
+
+  const protectedBlockMinutes = blocks.reduce(
+    (total, block) =>
+      total + minutesBetween(block.startIso, block.endIso),
     0
   );
+
+  const taskProtectedMinutes = scheduledTasks.reduce(
+    (total, task) =>
+      total + minutesBetween(task.startIso, task.endIso),
+    0
+  );
+
+  const protectedMinutes =
+    protectedBlockMinutes + taskProtectedMinutes;
+
+  const completedBlockMinutes = completedBlocks.reduce(
+    (total, block) =>
+      total + minutesBetween(block.startIso, block.endIso),
+    0
+  );
+
+  const completedTaskMinutes = completedTasks.reduce(
+    (total, task) =>
+      total + minutesBetween(task.startIso, task.endIso),
+    0
+  );
+
+  const completedMinutes =
+    completedBlockMinutes + completedTaskMinutes;
 
   const needleMoverFeedback = feedback.filter(
     (item) => item.needleMover === "yes"
   );
 
+  const totalProtectedItems =
+    blocks.length + scheduledTasks.length;
+
+  const totalCompletedItems =
+    completedBlocks.length + completedTasks.length;
+
   const completionRate =
-    blocks.length === 0
+    totalProtectedItems === 0
       ? 0
       : Math.round(
-          (completedBlocks.length / blocks.length) * 100
+          (totalCompletedItems / totalProtectedItems) * 100
         );
 
   const leverScores = new Map<string, number>();
@@ -106,6 +147,16 @@ export async function getWeeklyInsights(userId: string) {
     leverScores.set(category, current + delta);
   }
 
+  for (const task of scheduledTasks) {
+    const category = task.category ?? "admin";
+    const current = leverScores.get(category) ?? 0;
+
+    leverScores.set(
+      category,
+      current + (task.status === "completed" ? 2 : 1)
+    );
+  }
+
   const topLevers = [...leverScores.entries()]
     .map(([category, score]) => ({
       category,
@@ -114,12 +165,29 @@ export async function getWeeklyInsights(userId: string) {
     .sort((a, b) => b.score - a.score)
     .slice(0, 3);
 
-  const timeLeaks = missedBlocks.slice(0, 3).map((block) => ({
-    title: block.title,
-    category: block.leverCategory,
-    startIso: block.startIso,
-    reason: "Missed protected block",
-  }));
+  const missedTaskLeaks = tasks
+    .filter((task) => task.status === "missed")
+    .slice(0, 3)
+    .map((task) => ({
+      title: task.title,
+      category: task.category ?? "admin",
+      startIso: task.startIso,
+      reason: "Missed scheduled task",
+    }));
+
+  const missedBlockLeaks = missedBlocks
+    .slice(0, 3)
+    .map((block) => ({
+      title: block.title,
+      category: block.leverCategory,
+      startIso: block.startIso,
+      reason: "Missed protected block",
+    }));
+
+  const timeLeaks = [
+    ...missedBlockLeaks,
+    ...missedTaskLeaks,
+  ].slice(0, 3);
 
   return {
     weekStart,
@@ -129,9 +197,11 @@ export async function getWeeklyInsights(userId: string) {
       completedMinutes,
       completionRate,
       needleMoverWins: needleMoverFeedback.length,
-      totalBlocks: blocks.length,
-      completedBlocks: completedBlocks.length,
-      missedBlocks: missedBlocks.length,
+      totalBlocks: totalProtectedItems,
+      completedBlocks: totalCompletedItems,
+      missedBlocks:
+        missedBlocks.length +
+        tasks.filter((task) => task.status === "missed").length,
     },
     topLevers,
     timeLeaks,
