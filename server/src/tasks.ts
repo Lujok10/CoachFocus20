@@ -16,6 +16,15 @@ function computeEnd(start: Date, durationMinutes = 60) {
   return new Date(start.getTime() + durationMinutes * 60_000);
 }
 
+function hasGoogleCalendarScope(scope?: string | null) {
+  if (!scope) return false;
+
+  return (
+    scope.includes("https://www.googleapis.com/auth/calendar") ||
+    scope.includes("https://www.googleapis.com/auth/calendar.events")
+  );
+}
+
 export async function createTask(
   userId: string,
   input: {
@@ -40,19 +49,11 @@ export async function createTask(
       title: input.title.trim(),
       category: input.category ?? "admin",
       notes: input.notes ?? null,
-      dueDateIso: input.dueDateIso
-        ? new Date(input.dueDateIso)
-        : null,
-      startIso: input.startIso
-        ? new Date(input.startIso)
-        : null,
-      endIso: input.endIso
-        ? new Date(input.endIso)
-        : null,
+      dueDateIso: input.dueDateIso ? new Date(input.dueDateIso) : null,
+      startIso: input.startIso ? new Date(input.startIso) : null,
+      endIso: input.endIso ? new Date(input.endIso) : null,
       protectAsFocus: Boolean(input.protectAsFocus),
-      status: input.startIso
-        ? "scheduled"
-        : "unscheduled",
+      status: input.startIso ? "scheduled" : "unscheduled",
     },
   });
 }
@@ -61,13 +62,8 @@ export async function listTasks(userId: string) {
   await ensureUser(userId);
 
   return prisma.task.findMany({
-    where: {
-      userId,
-    },
-    orderBy: [
-      { startIso: "asc" },
-      { createdAt: "desc" },
-    ],
+    where: { userId },
+    orderBy: [{ startIso: "asc" }, { createdAt: "desc" }],
   });
 }
 
@@ -97,27 +93,45 @@ export async function scheduleTask(
     ? new Date(input.endIso)
     : task.endIso ?? computeEnd(start, input.durationMinutes ?? 60);
 
-  let provider = task.provider;
-  let providerEventId = task.providerEventId;
+  let provider = "local";
+  let providerEventId: string | null = task.providerEventId ?? null;
+  let calendarWriteStatus: "skipped" | "success" | "failed" = "skipped";
+  let calendarWriteError: string | null = null;
 
-  if (input.addToCalendar) {
-    providerEventId = await googleCreateOrUpdateFocusEvent({
-      userId,
-      existingEventId: task.providerEventId ?? undefined,
-      title: input.protectAsFocus ? `Focus 20: ${task.title}` : task.title,
-      startIso: start.toISOString(),
-      endIso: end.toISOString(),
-      focusBlockId: task.id,
-      leverCategory: task.category ?? "admin",
-    });
+  const connection = await prisma.googleCalendarConnection.findUnique({
+    where: { userId },
+  });
 
-    provider = "google";
+  const canWriteToGoogle =
+    Boolean(input.addToCalendar) && hasGoogleCalendarScope(connection?.scope);
+
+  if (canWriteToGoogle) {
+    try {
+      providerEventId = await googleCreateOrUpdateFocusEvent({
+        userId,
+        existingEventId: task.providerEventId ?? undefined,
+        title: input.protectAsFocus ? `Focus 20: ${task.title}` : task.title,
+        startIso: start.toISOString(),
+        endIso: end.toISOString(),
+        focusBlockId: task.id,
+        leverCategory: task.category ?? "admin",
+      });
+
+      provider = "google";
+      calendarWriteStatus = "success";
+    } catch (error) {
+      provider = "local";
+      providerEventId = null;
+      calendarWriteStatus = "failed";
+      calendarWriteError =
+        error instanceof Error ? error.message : String(error);
+
+      console.error("Google Calendar write failed. Saved task locally.", error);
+    }
   }
 
   const updated = await prisma.task.update({
-    where: {
-      id: taskId,
-    },
+    where: { id: taskId },
     data: {
       startIso: start,
       endIso: end,
@@ -135,9 +149,12 @@ export async function scheduleTask(
       payload: {
         taskId,
         title: updated.title,
+        provider,
         providerEventId,
         startIso: start.toISOString(),
         endIso: end.toISOString(),
+        calendarWriteStatus,
+        calendarWriteError,
       },
       undoPayload: {
         taskId,
@@ -151,13 +168,12 @@ export async function scheduleTask(
     ok: true,
     task: updated,
     actionId: action.id,
+    calendarWriteStatus,
+    calendarWriteError,
   };
 }
 
-export async function undoTaskSchedule(
-  userId: string,
-  taskId: string
-) {
+export async function undoTaskSchedule(userId: string, taskId: string) {
   await ensureUser(userId);
 
   const task = await prisma.task.findFirst({
@@ -172,13 +188,15 @@ export async function undoTaskSchedule(
   }
 
   if (task.providerEventId) {
-    await googleDeleteEvent(userId, task.providerEventId);
+    try {
+      await googleDeleteEvent(userId, task.providerEventId);
+    } catch (error) {
+      console.error("Google Calendar delete failed. Continuing local undo.", error);
+    }
   }
 
   const updated = await prisma.task.update({
-    where: {
-      id: taskId,
-    },
+    where: { id: taskId },
     data: {
       provider: "local",
       providerEventId: null,
