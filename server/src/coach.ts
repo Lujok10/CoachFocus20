@@ -368,10 +368,74 @@ export async function getRules(userId: string) {
 }
 
 export async function listCalendarEvents(
+  userId: string,
   startIso: string,
   endIso: string
 ) {
-  return [];
+  await ensureUser(userId);
+
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+
+  const [blocks, tasks] = await Promise.all([
+    prisma.focusBlock.findMany({
+      where: {
+        userId,
+        startIso: {
+          gte: start,
+          lte: end,
+        },
+        status: {
+          not: "cancelled",
+        },
+      },
+      orderBy: {
+        startIso: "asc",
+      },
+    }),
+
+    prisma.task.findMany({
+      where: {
+        userId,
+        startIso: {
+          gte: start,
+          lte: end,
+        },
+        status: {
+          not: "unscheduled",
+        },
+      },
+      orderBy: {
+        startIso: "asc",
+      },
+    }),
+  ]);
+
+  return [
+    ...blocks.map((block) => ({
+      id: block.id,
+      title: block.title,
+      start: block.startIso,
+      end: block.endIso,
+      type: "focus",
+      providerEventId: block.providerEventId,
+      isFocusBlock: true,
+      busy: true,
+    })),
+
+    ...tasks
+      .filter((task) => task.startIso && task.endIso)
+      .map((task) => ({
+        id: task.id,
+        title: task.title,
+        start: task.startIso,
+        end: task.endIso,
+        type: task.protectAsFocus ? "focus" : "task",
+        providerEventId: task.providerEventId,
+        isFocusBlock: Boolean(task.protectAsFocus),
+        busy: true,
+      })),
+  ];
 }
 
 export async function logNotificationSent(input: {

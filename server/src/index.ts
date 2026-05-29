@@ -214,6 +214,8 @@ app.post("/api/voice-checkin", async (req, res, next) => {
 
 app.get("/api/calendar/events", async (req, res, next) => {
   try {
+    const userId = getRequestUserId(req);
+
     const startIso =
       typeof req.query.startIso === "string"
         ? req.query.startIso
@@ -227,7 +229,7 @@ app.get("/api/calendar/events", async (req, res, next) => {
         ? req.query.endIso
         : endDate.toISOString();
 
-    res.json(await listCalendarEvents(startIso, endIso));
+    res.json(await listCalendarEvents(userId, startIso, endIso));
   } catch (error) {
     next(error);
   }
