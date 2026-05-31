@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type React from "react";
+import { usePwaInstall } from "../hooks/usePwaInstall";
 import { motion } from "framer-motion";
 import {
   Bell,
@@ -44,7 +45,7 @@ export function Settings() {
   const [googleConnectUrl, setGoogleConnectUrl] = useState("");
   const [isWorking, setIsWorking] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
-  
+  const { canInstall, install } = usePwaInstall();
 
   useEffect(() => {
     apiGetUserRules()
@@ -399,6 +400,15 @@ useEffect(() => {
                 {statusMessage}
               </p>
             )}
+
+            {canInstall && (
+                <button
+                  onClick={install}
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+                >
+                  Install Focus20 App
+                </button>
+              )}
 
             <div className="mt-4 space-y-3">
               <button

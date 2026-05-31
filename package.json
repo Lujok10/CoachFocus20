@@ -43,7 +43,8 @@
     "postcss": "latest",
     "prisma": "6.19.0",
     "tailwindcss": "^3.4.17",
-    "tsx": "latest"
+    "tsx": "latest",
+    "vite-plugin-pwa": "^1.3.0"
   },
   "engines": {
     "node": ">=20 <25"

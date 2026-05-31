@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { X, Play, Pause, Check } from "lucide-react";
 import { WakePlan } from "../types";
-
+import { showLocalNotification } from "../services/pwaNotifications";
 interface FocusModeOverlayProps {
   wakePlan: WakePlan;
   onClose: () => void;
@@ -63,12 +63,20 @@ export function FocusModeOverlay({
 
       setSecondsLeft(remaining);
 
+      showLocalNotification("Focus20 session complete", {
+        body: "Great work. Complete your quick check-in.",
+      });
+
       if (remaining <= 0 && !completedRef.current) {
-        completedRef.current = true;
-        localStorage.removeItem(storageKey);
-        setIsRunning(false);
-        setIsComplete(true);
-      }
+          completedRef.current = true;
+          localStorage.removeItem(storageKey);
+          setIsRunning(false);
+          setIsComplete(true);
+
+          showLocalNotification("Focus20 session complete", {
+            body: "Great work. Complete your quick check-in.",
+          });
+        }
     };
 
     tick();
