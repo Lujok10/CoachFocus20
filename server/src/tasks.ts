@@ -1,4 +1,5 @@
 import { prisma, ensureUser } from "./db";
+import { rebuildPatternProfile } from "./patterns";
 import {
   googleCreateOrUpdateFocusEvent,
   googleDeleteEvent,
@@ -73,6 +74,7 @@ export async function scheduleTask(
   input: ScheduleInput
 ) {
   await ensureUser(userId);
+  await rebuildPatternProfile(userId);
 
   const task = await prisma.task.findFirst({
     where: {
@@ -175,6 +177,7 @@ export async function scheduleTask(
 
 export async function undoTaskSchedule(userId: string, taskId: string) {
   await ensureUser(userId);
+  await rebuildPatternProfile(userId);
 
   const task = await prisma.task.findFirst({
     where: {

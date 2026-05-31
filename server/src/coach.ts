@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 import { prisma, ensureUser } from "./db";
 import { encryptSecret, decryptSecret } from "./crypto";
+import { rebuildPatternProfile, ensurePatternProfile } from "./patterns";
 
 const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
@@ -459,15 +460,68 @@ export async function previewFlexShift(input: {
   };
 }
 
-export async function recordCheckin(input: any) {
+export async function recordCheckin(input: {
+  focusBlockId: string;
+  result: "crushed" | "meh" | "missed";
+  needleMover: "yes" | "somewhat" | "no";
+  noteText?: string;
+}) {
+  const focusBlock = await prisma.focusBlock.findUnique({
+    where: {
+      id: input.focusBlockId,
+    },
+  });
+
+  if (!focusBlock) {
+    throw new Error("Focus block not found.");
+  }
+
+  const feedback = await prisma.feedback.create({
+    data: {
+      userId: focusBlock.userId,
+      focusBlockId: focusBlock.id,
+      result: input.result,
+      needleMover: input.needleMover,
+      noteText: input.noteText ?? null,
+    },
+  });
+
+  await prisma.focusBlock.update({
+    where: {
+      id: focusBlock.id,
+    },
+    data: {
+      status:
+        input.result === "missed"
+          ? "missed"
+          : "completed",
+    },
+  });
+
+  await prisma.analyticsEvent.create({
+  data: {
+    userId: focusBlock.userId,
+    name: "voice_checkin_used",
+    payload: {
+      focusBlockId: focusBlock.id,
+      result: input.result,
+      needleMover: input.needleMover,
+    },
+  },
+});
+
+  await rebuildPatternProfile(focusBlock.userId);
+
   return {
     ok: true,
-    ...input,
+    feedback,
   };
 }
 
 export async function refreshWakePlan(userId: string, force = false) {
   await ensureUser(userId);
+  await ensurePatternProfile(userId);
+  await rebuildPatternProfile(userId);
 
   const now = new Date();
   const start = new Date(now.getTime() + 15 * 60 * 1000);
