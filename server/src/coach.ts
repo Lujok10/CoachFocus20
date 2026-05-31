@@ -1,347 +1,235 @@
-import { google } from "googleapis";
+import { Prisma } from "@prisma/client";
 import { prisma, ensureUser } from "./db";
-import { encryptSecret, decryptSecret } from "./crypto";
-import { rebuildPatternProfile, ensurePatternProfile } from "./patterns";
+import {
+  googleCreateOrUpdateFocusEvent,
+  googleDeleteEvent,
+  googleFreeBusy,
+  googleMoveEvent,
+} from "./google";
+import { runAiPlanner } from "./planner";
+import { ensurePatternProfile, rebuildPatternProfile } from "./patterns";
+import { trackAnalytics } from "./analytics";
 
-const GOOGLE_SCOPES = [
-  "https://www.googleapis.com/auth/calendar.events",
-  "https://www.googleapis.com/auth/calendar.freebusy",
-  "https://www.googleapis.com/auth/userinfo.email",
-  "https://www.googleapis.com/auth/userinfo.profile",
-  "openid",
-];
+type ReservationStatus = "reserved" | "suggested" | "queued" | "cancelled";
 
-function requiredEnv(name: string) {
-  const value = process.env[name];
+type LeverCategory =
+  | "income"
+  | "health"
+  | "family"
+  | "admin"
+  | "learning"
+  | "creative";
 
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
+function todayRange() {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
 
-  return value;
+  const end = new Date(start);
+  end.setDate(start.getDate() + 1);
+
+  return { start, end };
 }
 
-function encryptedOrEmpty(value: string | null | undefined) {
-  return encryptSecret(value ?? "") ?? "";
+function hhmm(date: Date) {
+  return date.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
-function encryptedOrExisting(
-  value: string | null | undefined,
-  existing: string | null | undefined
-) {
-  if (!value) return existing ?? null;
-
-  return encryptSecret(value) ?? existing ?? null;
+function addMinutes(date: Date, minutes: number) {
+  return new Date(date.getTime() + minutes * 60_000);
 }
 
-export function getOAuthClient() {
-  const clientId = requiredEnv("GOOGLE_CLIENT_ID");
-  const clientSecret = requiredEnv("GOOGLE_CLIENT_SECRET");
-  const redirectUri = requiredEnv("GOOGLE_REDIRECT_URI");
+function getWindowLabel(date: Date) {
+  return date.getHours() < 12 ? "AM" : "PM";
+}
 
-  return new google.auth.OAuth2(
-    clientId,
-    clientSecret,
-    redirectUri
+async function userHasCalendarWriteScope(userId: string) {
+  const connection = await prisma.googleCalendarConnection.findUnique({
+    where: { userId },
+  });
+
+  const scope = connection?.scope ?? "";
+
+  return (
+    scope.includes("https://www.googleapis.com/auth/calendar") ||
+    scope.includes("https://www.googleapis.com/auth/calendar.events")
   );
 }
 
+async function chooseSlot(userId: string, durationMinutes = 60) {
+  const now = new Date();
+  const proposedStart = addMinutes(now, 15);
+  proposedStart.setSeconds(0, 0);
 
+  const proposedEnd = addMinutes(proposedStart, durationMinutes);
 
-export async function handleGoogleCallback(
-  code: string,
-  userId: string
-) {
-  console.log("Google callback hit for user:", userId);
-
-  await ensureUser(userId);
-
-  const oauth2Client = getOAuthClient();
-
-  const { tokens } = await oauth2Client.getToken(code);
-
-  console.log("Received Google tokens", {
-    hasAccessToken: Boolean(tokens.access_token),
-    hasRefreshToken: Boolean(tokens.refresh_token),
-    expiryDate: tokens.expiry_date,
-    scope: tokens.scope,
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
   });
 
-  oauth2Client.setCredentials(tokens);
+  const canReadCalendar =
+    Boolean(user?.calendarConnected) &&
+    (await userHasCalendarWriteScope(userId));
 
-  const oauth2 = google.oauth2({
-    version: "v2",
-    auth: oauth2Client,
-  });
-
-  const profile = await oauth2.userinfo.get();
-
-  console.log("Google profile:", profile.data.email);
-
-  await prisma.user.update({
-    where: {
-      id: userId,
-    },
-    data: {
-      email: profile.data.email ?? undefined,
-      name: profile.data.name ?? undefined,
-      provider: "google",
-      calendarConnected: true,
-      calendarPermission: "write",
-    },
-  });
-
-  const existingConnection =
-    await prisma.googleCalendarConnection.findUnique({
-      where: {
-        userId,
-      },
-    });
-
-  await prisma.googleCalendarConnection.upsert({
-    where: {
-      userId,
-    },
-    update: {
-      googleEmail: profile.data.email ?? undefined,
-      accessToken:
-        encryptedOrExisting(
-          tokens.access_token,
-          existingConnection?.accessToken
-        ) ?? encryptedOrEmpty(""),
-      refreshToken:
-        encryptedOrExisting(
-          tokens.refresh_token,
-          existingConnection?.refreshToken
-        ) ?? existingConnection?.refreshToken ?? undefined,
-      scope:
-        tokens.scope ??
-        existingConnection?.scope ??
-        GOOGLE_SCOPES.join(" "),
-      expiryDate: tokens.expiry_date
-        ? BigInt(tokens.expiry_date)
-        : existingConnection?.expiryDate ?? undefined,
-    },
-    create: {
-      userId,
-      googleEmail: profile.data.email ?? undefined,
-      accessToken: encryptedOrEmpty(tokens.access_token),
-      refreshToken: tokens.refresh_token
-        ? encryptedOrEmpty(tokens.refresh_token)
-        : undefined,
-      scope: tokens.scope ?? GOOGLE_SCOPES.join(" "),
-      expiryDate: tokens.expiry_date
-        ? BigInt(tokens.expiry_date)
-        : undefined,
-    },
-  });
-
-  console.log("Google connection saved for user:", userId);
-
-  return {
-    ok: true,
-    email: profile.data.email,
-  };
-}
-
-export async function getCalendarClient(userId: string) {
-  const connection =
-    await prisma.googleCalendarConnection.findUnique({
-      where: {
-        userId,
-      },
-    });
-
-  if (!connection) {
-    return null;
+  if (!canReadCalendar) {
+    return {
+      start: proposedStart,
+      end: proposedEnd,
+    };
   }
 
-  const oauth2Client = getOAuthClient();
+  const { start: dayStart, end: dayEnd } = todayRange();
 
-  oauth2Client.setCredentials({
-    access_token: decryptSecret(connection.accessToken),
-    refresh_token:
-      decryptSecret(connection.refreshToken) ?? undefined,
-    expiry_date: connection.expiryDate
-      ? Number(connection.expiryDate)
-      : undefined,
-  });
+  const busy = await googleFreeBusy(
+    userId,
+    dayStart.toISOString(),
+    dayEnd.toISOString()
+  ).catch(() => []);
 
-  oauth2Client.on("tokens", async (tokens) => {
-    try {
-      await prisma.googleCalendarConnection.update({
-        where: {
-          userId,
-        },
-        data: {
-          accessToken:
-            encryptedOrExisting(
-              tokens.access_token,
-              connection.accessToken
-            ) ?? connection.accessToken,
-          refreshToken:
-            encryptedOrExisting(
-              tokens.refresh_token,
-              connection.refreshToken
-            ) ?? connection.refreshToken,
-          expiryDate: tokens.expiry_date
-            ? BigInt(tokens.expiry_date)
-            : connection.expiryDate,
-        },
-      });
-    } catch (error) {
-      console.error(
-        "Failed to persist refreshed Google tokens",
-        error
-      );
+  const candidateHours = [9, 10, 11, 13, 14, 15, 16];
+
+  for (const hour of candidateHours) {
+    const slotStart = new Date();
+    slotStart.setHours(hour, 0, 0, 0);
+
+    if (slotStart < now) continue;
+
+    const slotEnd = addMinutes(slotStart, durationMinutes);
+
+    const hasConflict = busy.some((item: any) => {
+      const busyStart = new Date(item.start ?? "");
+      const busyEnd = new Date(item.end ?? "");
+
+      if (
+        Number.isNaN(busyStart.getTime()) ||
+        Number.isNaN(busyEnd.getTime())
+      ) {
+        return false;
+      }
+
+      return slotStart < busyEnd && slotEnd > busyStart;
+    });
+
+    if (!hasConflict) {
+      return {
+        start: slotStart,
+        end: slotEnd,
+      };
     }
-  });
-
-  return google.calendar({
-    version: "v3",
-    auth: oauth2Client,
-  });
-}
-
-export async function googleFreeBusy(
-  userId: string,
-  startIso: string,
-  endIso: string
-) {
-  const calendar = await getCalendarClient(userId);
-
-  if (!calendar) {
-    return [];
   }
 
-  const result = await calendar.freebusy.query({
-    requestBody: {
-      timeMin: startIso,
-      timeMax: endIso,
-      items: [{ id: "primary" }],
-    },
-  });
-
-  return result.data.calendars?.primary?.busy ?? [];
-}
-
-export async function googleCreateOrUpdateFocusEvent(params: {
-  userId: string;
-  existingEventId?: string | null;
-  title: string;
-  startIso: string;
-  endIso: string;
-  focusBlockId: string;
-  leverCategory: string;
-}) {
-  const calendar = await getCalendarClient(params.userId);
-
-  if (!calendar) {
-    throw new Error("Google Calendar is not connected.");
-  }
-
-  const event = {
-    summary: params.title,
-    description: [
-      "Created by Focus20 AI Deployment Coach.",
-      `focus_block_id=${params.focusBlockId}`,
-      `lever_category=${params.leverCategory}`,
-      "Undo from Focus20 to remove this reservation.",
-    ].join("\n"),
-    start: {
-      dateTime: params.startIso,
-    },
-    end: {
-      dateTime: params.endIso,
-    },
-    transparency: "opaque",
-  };
-
-  if (params.existingEventId) {
-    const updated = await calendar.events.patch({
-      calendarId: "primary",
-      eventId: params.existingEventId,
-      requestBody: event,
-    });
-
-    return updated.data.id ?? params.existingEventId;
-  }
-
-  const created = await calendar.events.insert({
-    calendarId: "primary",
-    requestBody: event,
-  });
-
-  if (!created.data.id) {
-    throw new Error("Google Calendar did not return an event id.");
-  }
-
-  return created.data.id;
-}
-
-export async function googleMoveEvent(input: {
-  userId: string;
-  eventId: string;
-  startIso: string;
-  endIso: string;
-  reason?: string;
-}) {
-  const calendar = await getCalendarClient(input.userId);
-
-  if (!calendar) {
-    throw new Error("Google Calendar is not connected.");
-  }
-
-  const current = await calendar.events.get({
-    calendarId: "primary",
-    eventId: input.eventId,
-  });
-
-  const existingDescription = current.data.description ?? "";
-
-  const updated = await calendar.events.patch({
-    calendarId: "primary",
-    eventId: input.eventId,
-    requestBody: {
-      start: {
-        dateTime: input.startIso,
-      },
-      end: {
-        dateTime: input.endIso,
-      },
-      description: `${existingDescription}\n\nMoved by Focus20: ${
-        input.reason ?? "Flex shift"
-      }`,
-    },
-  });
-
-  return updated.data.id ?? input.eventId;
-}
-
-export async function applyFlexShift(input: {
-  eventId: string;
-  title: string;
-  oldStartIso: string;
-  oldEndIso: string;
-  newStartIso: string;
-  newEndIso: string;
-  reason?: string;
-}) {
   return {
-    ok: true,
-    moved: true,
-    ...input,
+    start: proposedStart,
+    end: proposedEnd,
   };
 }
 
-export async function canSendNotification() {
+function buildWakePlan(input: {
+  block: any;
+  actionId: string;
+  planner: {
+    leverTitle: string;
+    leverCategory: string;
+    why: string;
+    plan: string[];
+    alternatives: Array<{ title: string; category: string }>;
+    confidence: number;
+  };
+  reservationStatus: ReservationStatus;
+  isReserved: boolean;
+  calendarReconnectRequired: boolean;
+  readOnlyCalendar: boolean;
+}) {
+  const {
+    block,
+    actionId,
+    planner,
+    reservationStatus,
+    isReserved,
+    calendarReconnectRequired,
+    readOnlyCalendar,
+  } = input;
+
   return {
-    ok: true,
-    allowed: true,
+    id: `wake_${block.id}`,
+
+    sentence: `Your biggest lever today: ${planner.leverTitle} — block ${hhmm(
+      block.startIso
+    )}–${hhmm(block.endIso)}.`,
+
+    lever: {
+      title: planner.leverTitle,
+      category: planner.leverCategory,
+      predictedImpact: block.predictedImpact,
+    },
+
+    why:
+      planner.why ||
+      "This is your next protected execution block based on your recent pattern.",
+
+    plan:
+      planner.plan?.slice(0, 3) ?? [
+        "Open the task or workspace.",
+        "Work for the protected focus block.",
+        "Capture the next action before stopping.",
+      ],
+
+    alternatives:
+      planner.alternatives?.slice(0, 2).map((item) => ({
+        title: item.title,
+        time: "Later today",
+        category: item.category,
+      })) ?? [],
+
+    timeLeak: {
+      title: "Unprotected calendar time",
+      minutes: 30,
+      fixAction: "Protect this block before distractions take over.",
+    },
+
+    confidenceLevel:
+      block.confidence >= 80 ? "high" : block.confidence >= 60 ? "medium" : "low",
+
+    confidence: block.confidence,
+
+    block: {
+      id: block.id,
+      userId: block.userId,
+      title: block.title,
+      startIso: block.startIso.toISOString(),
+      endIso: block.endIso.toISOString(),
+      provider: block.provider,
+      providerEventId: block.providerEventId,
+      window: getWindowLabel(block.startIso),
+      status: block.status,
+      leverCategory: block.leverCategory,
+      predictedImpact: block.predictedImpact,
+      confidence: block.confidence,
+      startTime: hhmm(block.startIso),
+      endTime: hhmm(block.endIso),
+      durationMinutes: Math.round(
+        (block.endIso.getTime() - block.startIso.getTime()) / 60000
+      ),
+      date: block.startIso.toISOString().split("T")[0],
+    },
+
+    status: block.status,
+    reserved: isReserved,
+    isReserved,
+    reservationStatus,
+    calendarReconnectRequired,
+    readOnlyCalendar,
+    actionId,
+    undoToken: actionId,
   };
 }
 
 export async function getRules(userId: string) {
+  await ensureUser(userId);
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
   });
@@ -366,6 +254,205 @@ export async function getRules(userId: string) {
     timezone: user.timezone,
     buffersMinutes: user.buffersMinutes,
   };
+}
+
+export async function updateRules(userId: string, data: Record<string, unknown>) {
+  await ensureUser(userId);
+
+  const permission =
+    data.calendarPermission === "read-only"
+      ? "read_only"
+      : data.calendarPermission;
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      protectEnabled:
+        typeof data.protectEnabled === "boolean"
+          ? data.protectEnabled
+          : undefined,
+      flexShiftEnabled:
+        typeof data.flexShiftEnabled === "boolean"
+          ? data.flexShiftEnabled
+          : undefined,
+      notificationsEnabled:
+        typeof data.notificationsEnabled === "boolean"
+          ? data.notificationsEnabled
+          : undefined,
+      buffersMinutes:
+        typeof data.buffersMinutes === "number" ? data.buffersMinutes : undefined,
+      calendarPermission:
+        typeof permission === "string" ? (permission as any) : undefined,
+    },
+  });
+
+  return getRules(userId);
+}
+
+export async function refreshWakePlan(userId: string, force = false) {
+  await ensureUser(userId);
+  await ensurePatternProfile(userId);
+  await rebuildPatternProfile(userId);
+
+  
+
+  const planner = await runAiPlanner(userId);
+  const rules = await getRules(userId);
+  const { start: todayStart, end: todayEnd } = todayRange();
+
+  let existing = await prisma.focusBlock.findFirst({
+    where: {
+      userId,
+      startIso: {
+        gte: todayStart,
+        lt: todayEnd,
+      },
+      status: {
+        not: "cancelled",
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  const canWriteToCalendar =
+    rules.calendarConnected &&
+    rules.calendarPermission === "write" &&
+    rules.protectEnabled &&
+    (await userHasCalendarWriteScope(userId));
+
+  const slot = await chooseSlot(userId, 60);
+
+
+  const title = `Focus 20: ${planner.leverTitle}`;
+  const leverCategory = planner.leverCategory as LeverCategory;
+  const predictedImpact = Math.max(1, Math.round(planner.confidence / 20));
+  const confidence = Math.max(35, Math.min(95, Math.round(planner.confidence)));
+
+  let block = existing;
+
+  if (!block || force) {
+    block = await prisma.focusBlock.create({
+  data: {
+    userId,
+    provider: canWriteToCalendar ? "google" : "local",
+    providerEventId: null,
+    title,
+    startIso: slot.start,
+    endIso: slot.end,
+    status: "scheduled",
+    leverCategory,
+    predictedImpact,
+    confidence,
+  },
+});
+
+  } else if (force) {
+    block = await prisma.focusBlock.update({
+      where: { id: block.id },
+      data: {
+        title,
+        startIso: slot.start,
+        endIso: slot.end,
+        leverCategory,
+        predictedImpact,
+        confidence,
+      },
+    });
+  }
+
+  let providerEventId = block.providerEventId;
+  let reservationStatus: ReservationStatus = canWriteToCalendar
+    ? "reserved"
+    : "suggested";
+  let isReserved = false;
+
+  if (canWriteToCalendar) {
+    try {
+      providerEventId = await googleCreateOrUpdateFocusEvent({
+        userId,
+        existingEventId: block.providerEventId ?? undefined,
+        title: block.title,
+        startIso: block.startIso.toISOString(),
+        endIso: block.endIso.toISOString(),
+        focusBlockId: block.id,
+        leverCategory: block.leverCategory,
+      });
+
+      block = await prisma.focusBlock.update({
+        where: { id: block.id },
+        data: {
+          provider: "google",
+          providerEventId,
+          status: "scheduled",
+        },
+      });
+
+      reservationStatus = "reserved";
+      isReserved = true;
+
+      await trackAnalytics(userId, "block_reserved_silent", {
+        blockId: block.id,
+        providerEventId,
+      });
+    } catch (error) {
+      console.error("Google Calendar write failed. Keeping local block.", error);
+
+      block = await prisma.focusBlock.update({
+        where: { id: block.id },
+        data: {
+          provider: "local",
+          providerEventId: null,
+          status: "scheduled",
+        },
+      });
+
+      reservationStatus = "queued";
+      isReserved = false;
+    }
+  }
+
+  const action = await prisma.actionsLog.create({
+    data: {
+      userId,
+      actionType: "reserve_block",
+      payload: {
+        blockId: block.id,
+        title: block.title,
+        providerEventId,
+        startIso: block.startIso.toISOString(),
+        endIso: block.endIso.toISOString(),
+        reservationStatus,
+        force,
+      },
+      undoPayload: {
+        focusBlockId: block.id,
+        providerEventId,
+        operation: providerEventId ? "delete_google_event" : "cancel_focus_block",
+      },
+    },
+  });
+
+  await trackAnalytics(userId, "wake_sentence_shown", {
+    wakePlanId: `wake_${block.id}`,
+    blockId: block.id,
+  });
+
+  await trackAnalytics(userId, "wake_plan_refreshed", {
+    force,
+    blockId: block.id,
+  });
+
+  return buildWakePlan({
+    block,
+    actionId: action.id,
+    planner,
+    reservationStatus,
+    isReserved,
+    calendarReconnectRequired: !rules.calendarConnected,
+    readOnlyCalendar: rules.calendarPermission === "read-only",
+  });
 }
 
 export async function listCalendarEvents(
@@ -439,31 +526,10 @@ export async function listCalendarEvents(
   ];
 }
 
-export async function logNotificationSent(input: {
-  focusBlockId?: string;
-  type: string;
-}) {
-  return {
-    ok: true,
-    logged: true,
-    ...input,
-  };
-}
-
-export async function previewFlexShift(input: {
-  startIso: string;
-  endIso: string;
-}) {
-  return {
-    ok: true,
-    candidates: [],
-  };
-}
-
 export async function recordCheckin(input: {
   focusBlockId: string;
   result: "crushed" | "meh" | "missed";
-  needleMover: "yes" | "somewhat" | "no";
+  needleMover: "yes" | "somewhat" | "no" | "unconfirmed";
   noteText?: string;
 }) {
   const focusBlock = await prisma.focusBlock.findUnique({
@@ -475,6 +541,8 @@ export async function recordCheckin(input: {
   if (!focusBlock) {
     throw new Error("Focus block not found.");
   }
+
+  const status = input.result === "missed" ? "missed" : "completed";
 
   const feedback = await prisma.feedback.create({
     data: {
@@ -491,228 +559,441 @@ export async function recordCheckin(input: {
       id: focusBlock.id,
     },
     data: {
-      status:
-        input.result === "missed"
-          ? "missed"
-          : "completed",
+      status,
     },
   });
 
-  await prisma.analyticsEvent.create({
-  data: {
-    userId: focusBlock.userId,
-    name: "voice_checkin_used",
-    payload: {
-      focusBlockId: focusBlock.id,
-      result: input.result,
-      needleMover: input.needleMover,
+  if (
+  status === "completed" &&
+  (input.needleMover === "yes" ||
+    input.result === "crushed")
+) {
+  await prisma.user.update({
+    where: {
+      id: focusBlock.userId,
     },
-  },
-});
+    data: {
+      completedFirstLever: true,
+    },
+  });
+}
+
+  await trackAnalytics(focusBlock.userId, "voice_checkin_used", {
+    focusBlockId: focusBlock.id,
+    result: input.result,
+    needleMover: input.needleMover,
+  });
+
+  await trackAnalytics(focusBlock.userId, "needle_mover_feedback_recorded", {
+    focusBlockId: focusBlock.id,
+    needleMover: input.needleMover,
+  });
+
+  await trackAnalytics(focusBlock.userId, "block_completed", {
+    focusBlockId: focusBlock.id,
+    status,
+  });
 
   await rebuildPatternProfile(focusBlock.userId);
 
   return {
     ok: true,
     feedback,
+    status,
   };
 }
 
-export async function refreshWakePlan(userId: string, force = false) {
+export async function startFocusBlock(userId: string, focusBlockId?: string) {
   await ensureUser(userId);
-  await ensurePatternProfile(userId);
-  await rebuildPatternProfile(userId);
 
-  const now = new Date();
-  const start = new Date(now.getTime() + 15 * 60 * 1000);
-  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  let block = focusBlockId
+    ? await prisma.focusBlock.findFirst({
+        where: {
+          id: focusBlockId,
+          userId,
+        },
+      })
+    : null;
 
-  let block = await prisma.focusBlock.findFirst({
-    where: {
-      userId,
-      status: {
-        not: "cancelled",
-      },
-      startIso: {
-        gte: now,
-      },
-    },
-    orderBy: {
-      startIso: "asc",
-    },
-  });
-
-  if (!block || force) {
-    block = await prisma.focusBlock.create({
-      data: {
+  if (!block) {
+    block = await prisma.focusBlock.findFirst({
+      where: {
         userId,
-        title: "Deep Work Session",
-        provider: "local",
-        providerEventId: null,
-        startIso: start,
-        endIso: end,
-        status: "scheduled",
-        leverCategory: "admin",
-        predictedImpact: 4,
-        confidence: 80,
+        status: {
+          in: ["scheduled", "started"],
+        },
+      },
+      orderBy: {
+        startIso: "asc",
       },
     });
   }
 
-  const action = await prisma.actionsLog.create({
+  if (!block) {
+    throw new Error("No FocusBlock found to start.");
+  }
+
+  const updated = await prisma.focusBlock.update({
+    where: {
+      id: block.id,
+    },
     data: {
-      userId,
-      actionType: "reserve_block",
-      payload: {
-        blockId: block.id,
-        title: block.title,
-        startIso: block.startIso.toISOString(),
-        endIso: block.endIso.toISOString(),
-      },
-      undoPayload: {
-        focusBlockId: block.id,
-        operation: "cancel_focus_block",
-      },
+      status: "started",
     },
   });
 
-return {
-  id: `wake_${block.id}`,
+  await trackAnalytics(userId, "block_started", {
+    focusBlockId: updated.id,
+  });
 
-  sentence: `${block.title} — ${block.startIso.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  })} to ${block.endIso.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  })}.`,
-
-  lever: {
-    title: block.title,
-    category: block.leverCategory,
-    predictedImpact: block.predictedImpact,
-  },
-
-  why: "This is your next protected execution block.",
-
-  plan: [
-    "Open the task or workspace.",
-    "Work for the protected focus block.",
-    "Capture the next action before stopping.",
-  ],
-
-  alternatives: [
-    {
-      title: "Clear one priority admin task",
-      time: "Later today",
-      category: "admin",
-    },
-    {
-      title: "Review learning backlog",
-      time: "Tomorrow morning",
-      category: "learning",
-    },
-  ],
-
-  timeLeak: {
-    title: "Unprotected calendar time",
-    minutes: 30,
-    fixAction: "Protect this block before distractions take over.",
-  },
-
-  confidenceLevel: "high",
-  confidence: block.confidence,
-
-  block: {
-    id: block.id,
-    userId: block.userId,
-    title: block.title,
-    startIso: block.startIso.toISOString(),
-    endIso: block.endIso.toISOString(),
-    provider: block.provider,
-    providerEventId: block.providerEventId,
-    window: block.startIso.getHours() < 12 ? "AM" : "PM",
-    status: block.status,
-    leverCategory: block.leverCategory,
-    predictedImpact: block.predictedImpact,
-    confidence: block.confidence,
-    startTime: block.startIso.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
-    endTime: block.endIso.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
-    durationMinutes: Math.round(
-      (block.endIso.getTime() - block.startIso.getTime()) / 60000
-    ),
-    date: block.startIso.toISOString().split("T")[0],
-  },
-
-  status: block.status,
-  reserved: block.status === "scheduled",
-  isReserved: block.status === "scheduled",
-  reservationStatus: block.status === "scheduled" ? "reserved" : "suggested",
-  calendarReconnectRequired: false,
-  readOnlyCalendar: false,
-  actionId: action.id,
-  undoToken: action.id,
-};
-}
-
-export async function startFocusBlock(
-  focusBlockId?: string
-) {
   return {
     ok: true,
-    focusBlockId,
-  };
-}
-
-export async function trackEvent(
-  name: string,
-  payload?: any
-) {
-  return {
-    ok: true,
-    name,
-    payload,
+    block: updated,
+    shouldStartTimer: true,
   };
 }
 
 export async function undoAction(actionId: string) {
-  return {
-    success: true,
-    actionId,
-  };
-}
-
-export async function updateRules(
-  userId: string,
-  data: any
-) {
-  return {
-    ok: true,
-    userId,
-    ...data,
-  };
-}
-
-export async function googleDeleteEvent(
-  userId: string,
-  eventId: string
-) {
-  const calendar = await getCalendarClient(userId);
-
-  if (!calendar) {
-    throw new Error("Google Calendar is not connected.");
-  }
-
-  await calendar.events.delete({
-    calendarId: "primary",
-    eventId,
+  const action = await prisma.actionsLog.findUnique({
+    where: { id: actionId },
   });
 
-  return { ok: true };
+  if (!action || action.status !== "applied") {
+    return {
+      success: false,
+      reason: "Action not found or already undone.",
+    };
+  }
+
+  const undo = action.undoPayload as {
+    providerEventId?: string | null;
+    focusBlockId?: string;
+    operation?: string;
+  };
+
+  if (undo.providerEventId && undo.operation === "delete_google_event") {
+    await googleDeleteEvent(action.userId, undo.providerEventId).catch((error) => {
+      console.error("Google event delete failed during undo.", error);
+    });
+  }
+
+  if (undo.focusBlockId) {
+    await prisma.focusBlock.update({
+      where: { id: undo.focusBlockId },
+      data: { status: "cancelled" },
+    });
+  }
+
+  await prisma.actionsLog.update({
+    where: { id: actionId },
+    data: { status: "undone" },
+  });
+
+  await trackAnalytics(action.userId, "undo_used", {
+    actionId,
+  });
+
+  await rebuildPatternProfile(action.userId);
+
+  return {
+    success: true,
+  };
+}
+
+export async function canSendNotification(userId?: string) {
+  if (!userId) {
+    return {
+      allowed: false,
+      reason: "Missing user.",
+    };
+  }
+
+  await ensureUser(userId);
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!user?.notificationsEnabled) {
+    return {
+      allowed: false,
+      reason: "Notifications disabled.",
+    };
+  }
+
+  if (!user.completedFirstLever) {
+    return {
+      allowed: false,
+      reason: "Complete first lever before notifications.",
+    };
+  }
+
+  const { start, end } = todayRange();
+
+  const sentToday = await prisma.analyticsEvent.count({
+    where: {
+      userId,
+      name: "notification_sent",
+      createdAt: {
+        gte: start,
+        lt: end,
+      },
+    },
+  });
+
+  if (sentToday >= 2) {
+    return {
+      allowed: false,
+      reason: "Daily notification limit reached.",
+    };
+  }
+
+  return {
+    allowed: true,
+    sentToday,
+  };
+}
+
+export async function logNotificationSent(input: {
+  userId?: string;
+  focusBlockId?: string;
+  type: "pre_block_reminder" | "end_of_day_checkin" | string;
+}) {
+  if (!input.userId) {
+    return {
+      ok: false,
+      reason: "Missing user.",
+    };
+  }
+
+  const check = await canSendNotification(input.userId);
+
+  if (!check.allowed) {
+    return {
+      ok: false,
+      reason: check.reason,
+    };
+  }
+
+  await trackAnalytics(input.userId, "notification_sent", {
+    type: input.type,
+    focusBlockId: input.focusBlockId ?? null,
+  });
+
+  await prisma.actionsLog.create({
+    data: {
+      userId: input.userId,
+      actionType: "notification_sent",
+      payload: {
+        type: input.type,
+        focusBlockId: input.focusBlockId ?? null,
+      },
+      undoPayload: {
+        notUndoable: true,
+      },
+    },
+  });
+
+  return {
+    ok: true,
+  };
+}
+
+function isProtectedEventTitle(title: string) {
+  const lower = title.toLowerCase();
+
+  return (
+    lower.includes("medical") ||
+    lower.includes("doctor") ||
+    lower.includes("family") ||
+    lower.includes("travel") ||
+    lower.includes("flight") ||
+    lower.includes("school") ||
+    lower.includes("protected")
+  );
+}
+
+function isFlexEventTitle(title: string) {
+  return title.toLowerCase().includes("flex");
+}
+
+export async function previewFlexShift(input: {
+  userId?: string;
+  startIso: string;
+  endIso: string;
+}) {
+  if (!input.userId) {
+    return {
+      ok: false,
+      reason: "Missing user.",
+      candidates: [],
+    };
+  }
+
+  const rules = await getRules(input.userId);
+
+  if (!rules.flexShiftEnabled) {
+    return {
+      ok: false,
+      reason: "Flex shift is not enabled.",
+      candidates: [],
+    };
+  }
+
+  const busy = await googleFreeBusy(input.userId, input.startIso, input.endIso).catch(
+    () => []
+  );
+
+  const candidates = busy
+    .filter((event: any) => {
+      const title = event.title ?? event.summary ?? "";
+
+      if (!isFlexEventTitle(title)) return false;
+      if (isProtectedEventTitle(title)) return false;
+      if (event.attendees?.length > 0) return false;
+
+      return true;
+    })
+    .slice(0, 3)
+    .map((event: any, index: number) => {
+      const oldStart = new Date(event.start);
+      const oldEnd = new Date(event.end);
+      const durationMs = oldEnd.getTime() - oldStart.getTime();
+
+      const newStart = addMinutes(oldEnd, 30);
+      const newEnd = new Date(newStart.getTime() + durationMs);
+
+      return {
+        id: event.id ?? `flex-candidate-${index}`,
+        title: event.title ?? event.summary ?? "FLEX event",
+        oldStartIso: oldStart.toISOString(),
+        oldEndIso: oldEnd.toISOString(),
+        newStartIso: newStart.toISOString(),
+        newEndIso: newEnd.toISOString(),
+        reason: "FLEX-tagged event can be moved to protect Focus 20 time.",
+      };
+    });
+
+  await trackAnalytics(input.userId, "flex_shift_previewed", {
+    candidateCount: candidates.length,
+  });
+
+  return {
+    ok: true,
+    candidates,
+  };
+}
+
+export async function applyFlexShift(input: {
+  userId?: string;
+  eventId: string;
+  title: string;
+  oldStartIso: string;
+  oldEndIso: string;
+  newStartIso: string;
+  newEndIso: string;
+  reason?: string;
+}) {
+  if (!input.userId) {
+    return {
+      ok: false,
+      reason: "Missing user.",
+    };
+  }
+
+  const rules = await getRules(input.userId);
+
+  if (!rules.flexShiftEnabled) {
+    return {
+      ok: false,
+      reason: "Flex shift is not enabled.",
+    };
+  }
+
+  if (!isFlexEventTitle(input.title)) {
+    return {
+      ok: false,
+      reason: "Only FLEX-tagged events can be shifted.",
+    };
+  }
+
+  if (isProtectedEventTitle(input.title)) {
+    return {
+      ok: false,
+      reason: "Protected events cannot be shifted.",
+    };
+  }
+
+  const { start, end } = todayRange();
+
+  const movesToday = await prisma.actionsLog.count({
+    where: {
+      userId: input.userId,
+      actionType: "flex_event_shifted",
+      status: "applied",
+      createdAt: {
+        gte: start,
+        lt: end,
+      },
+    },
+  });
+
+  if (movesToday >= rules.maxMovesPerDay) {
+    return {
+      ok: false,
+      reason: "Daily flex shift limit reached.",
+    };
+  }
+
+  const movedEventId = await googleMoveEvent({
+    userId: input.userId,
+    eventId: input.eventId,
+    startIso: input.newStartIso,
+    endIso: input.newEndIso,
+    reason: input.reason ?? "Focus20 flex shift",
+  });
+
+  const action = await prisma.actionsLog.create({
+    data: {
+      userId: input.userId,
+      actionType: "flex_event_shifted",
+      payload: {
+        eventId: input.eventId,
+        movedEventId,
+        title: input.title,
+        oldStartIso: input.oldStartIso,
+        oldEndIso: input.oldEndIso,
+        newStartIso: input.newStartIso,
+        newEndIso: input.newEndIso,
+        reason: input.reason ?? "Focus20 flex shift",
+      },
+      undoPayload: {
+        operation: "move_google_event_back",
+        eventId: movedEventId,
+        oldStartIso: input.oldStartIso,
+        oldEndIso: input.oldEndIso,
+      },
+    },
+  });
+
+  await trackAnalytics(input.userId, "flex_event_shifted", {
+    eventId: movedEventId,
+    actionId: action.id,
+  });
+
+  return {
+    ok: true,
+    movedEventId,
+    actionId: action.id,
+  };
+}
+
+export async function trackEvent(
+  userId: string,
+  name: string,
+  payload: Prisma.InputJsonValue = {}
+) {
+  await ensureUser(userId);
+
+  return trackAnalytics(userId, name, payload);
 }

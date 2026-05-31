@@ -120,6 +120,10 @@ async function getHealthStatus() {
   }
 }
 
+
+
+
+
 app.get("/health", async (_req, res) => {
   const health = await getHealthStatus();
   res.status(health.ok ? 200 : 503).json(health);
