@@ -1,4 +1,5 @@
 import { Download, Share2, Copy, Flame } from "lucide-react";
+import { apiTrackEvent } from "../services/apiClient";
 import {
   ResponsiveContainer,
   LineChart,
@@ -8,7 +9,7 @@ import {
   Tooltip,
   CartesianGrid,
 } from "recharts";
-import { trackEvent } from "../services/analytics";
+
 
 type WeeklyReportData = {
   weekStart?: string;
@@ -81,10 +82,10 @@ export function WeeklyReportCard({ insights }: WeeklyReportCardProps) {
 
   const copySummary = async () => {
     await navigator.clipboard.writeText(shareText);
-    trackEvent("weekly_report_shared", {
-      method: "copy",
-    });
-  };
+   apiTrackEvent("weekly_report_shared", {
+  method: "copy",
+    }).catch(console.error);
+      };
 
   const shareReport = async () => {
     if (navigator.share) {
@@ -93,9 +94,9 @@ export function WeeklyReportCard({ insights }: WeeklyReportCardProps) {
         text: shareText,
       });
 
-      trackEvent("weekly_report_shared", {
-        method: "native_share",
-      });
+     apiTrackEvent("weekly_report_shared", {
+      method: "copy",
+    }).catch(console.error);
 
       return;
     }
@@ -104,9 +105,9 @@ export function WeeklyReportCard({ insights }: WeeklyReportCardProps) {
   };
 
   const printOrSavePdf = () => {
-    trackEvent("weekly_report_shared", {
-      method: "pdf_print",
-    });
+   apiTrackEvent("weekly_report_shared", {
+      method: "copy",
+    }).catch(console.error);
 
     window.print();
   };
@@ -139,9 +140,9 @@ export function WeeklyReportCard({ insights }: WeeklyReportCardProps) {
 
     URL.revokeObjectURL(url);
 
-    trackEvent("weekly_report_shared", {
-      method: "image_svg",
-    });
+    apiTrackEvent("weekly_report_shared", {
+        method: "copy",
+      }).catch(console.error);
   };
 
   return (

@@ -282,3 +282,15 @@ export async function apiClearUserHistory() {
     }
   );
 }
+export async function apiTrackEvent(
+  eventType: string,
+  payload?: Record<string, unknown>
+) {
+  return request("/api/analytics/track", {
+    method: "POST",
+    body: JSON.stringify({
+      eventType,
+      payload,
+    }),
+  });
+}
