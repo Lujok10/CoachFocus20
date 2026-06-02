@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { chooseSmartSlot } from "./scheduler";
 import { prisma, ensureUser } from "./db";
 import {
   googleCreateOrUpdateFocusEvent,
@@ -322,8 +323,12 @@ export async function refreshWakePlan(userId: string, force = false) {
     rules.protectEnabled &&
     (await userHasCalendarWriteScope(userId));
 
-  const slot = await chooseSlot(userId, 60);
-
+  const slot = await chooseSmartSlot({
+  userId,
+  durationMinutes: 60,
+  category: planner.leverCategory,
+  includeGoogleBusy: canWriteToCalendar,
+});
 
   const title = `Focus 20: ${planner.leverTitle}`;
   const leverCategory = planner.leverCategory as LeverCategory;
@@ -425,6 +430,11 @@ export async function refreshWakePlan(userId: string, force = false) {
         endIso: block.endIso.toISOString(),
         reservationStatus,
         force,
+        scheduler: {
+          score: slot.score,
+          reasons: slot.reasons,
+          capacity: slot.capacity,
+        },
       },
       undoPayload: {
         focusBlockId: block.id,

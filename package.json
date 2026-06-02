@@ -29,6 +29,7 @@
     "openai": "^6.37.0",
     "react": "latest",
     "react-dom": "latest",
+    "recharts": "^3.8.1",
     "typescript": "latest",
     "vite": "latest"
   },

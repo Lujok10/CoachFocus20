@@ -5,29 +5,6 @@ const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   : null;
 
-export type PlannerInput = {
-  rules: any;
-  patternProfile: any;
-  recentFeedback: any[];
-  availableWindows: Array<{
-    startIso: string;
-    endIso: string;
-    score: number;
-  }>;
-};
-
-export type PlannerOutput = {
-  leverTitle: string;
-  leverCategory: string;
-  why: string;
-  plan: string[];
-  alternatives: Array<{
-    title: string;
-    category: string;
-  }>;
-  confidence: number;
-};
-
 const allowedCategories = [
   "income",
   "health",
@@ -37,121 +14,242 @@ const allowedCategories = [
   "creative",
 ];
 
-export async function buildPlannerInput(
-  userId: string
-): Promise<PlannerInput> {
-  await ensureUser(userId);
+type LeverCategory =
+  | "income"
+  | "health"
+  | "family"
+  | "admin"
+  | "learning"
+  | "creative";
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-  });
+export type PlannerInput = {
+  rules: any;
+  patternProfile: any;
+  recentFeedback: any[];
+  recentBlocks: any[];
+  recentTasks: any[];
+  candidateTasks: PlannerCandidate[];
+  availableWindows: Array<{
+    startIso: string;
+    endIso: string;
+    score: number;
+    label: string;
+  }>;
+  contextSignals: {
+    overdueTaskCount: number;
+    scheduledTaskCount: number;
+    completedStreakDays: number;
+    missedLast7Days: number;
+    completionRateLast14Days: number;
+    meetingDensityScore: number;
+    bestWindowScore: number;
+    energyWindowLabel: string;
+  };
+};
 
-  const patternProfile = await prisma.patternProfile.findUnique({
-    where: { userId },
-  });
+export type PlannerCandidate = {
+  id: string;
+  source: "task" | "focus_pattern";
+  title: string;
+  category: LeverCategory;
+  dueDateIso?: string | null;
+  overdue: boolean;
+  scheduled: boolean;
+  historicalScore: number;
+  urgencyScore: number;
+  streakScore: number;
+  meetingDensityScore: number;
+  energyScore: number;
+  totalScore: number;
+  reasonSignals: string[];
+};
 
-  const recentFeedback = await prisma.feedback.findMany({
-    where: { userId },
-    include: { focusBlock: true },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-  });
+export type PlannerOutput = {
+  leverTitle: string;
+  leverCategory: LeverCategory;
+  why: string;
+  plan: string[];
+  alternatives: Array<{
+    title: string;
+    category: LeverCategory;
+  }>;
+  confidence: number;
+};
 
-  const bestWindows =
-    (patternProfile?.bestWindows as any[]) ?? [
-      { start: "09:30", end: "10:30", score: 0.8 },
-    ];
+function clamp(value: number, min = 0, max = 100) {
+  return Math.max(min, Math.min(max, value));
+}
 
+function normalizeCategory(category?: string | null): LeverCategory {
+  if (category && allowedCategories.includes(category)) {
+    return category as LeverCategory;
+  }
+
+  return "admin";
+}
+
+function daysBetween(a: Date, b: Date) {
+  const day = 24 * 60 * 60 * 1000;
+  return Math.floor((a.getTime() - b.getTime()) / day);
+}
+
+function isSameDay(a: Date, b: Date) {
+  return a.toISOString().slice(0, 10) === b.toISOString().slice(0, 10);
+}
+
+function calculateStreakDays(blocks: any[], tasks: any[]) {
+  const completedDates = new Set<string>();
+
+  for (const block of blocks) {
+    if (block.status === "completed") {
+      completedDates.add(block.startIso.toISOString().slice(0, 10));
+    }
+  }
+
+  for (const task of tasks) {
+    if (task.status === "completed" && task.startIso) {
+      completedDates.add(task.startIso.toISOString().slice(0, 10));
+    }
+  }
+
+  let streak = 0;
+  const cursor = new Date();
+
+  for (let i = 0; i < 30; i += 1) {
+    const key = cursor.toISOString().slice(0, 10);
+
+    if (!completedDates.has(key)) {
+      break;
+    }
+
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  return streak;
+}
+
+function getWindowLabel(date: Date) {
+  const hour = date.getHours();
+
+  if (hour < 10) return "early morning";
+  if (hour < 12) return "late morning";
+  if (hour < 15) return "early afternoon";
+  if (hour < 18) return "late afternoon";
+
+  return "evening";
+}
+
+function getDefaultWindows() {
   const today = new Date();
 
-  const availableWindows = bestWindows.map((window) => {
-    const [startHour, startMinute] = String(window.start)
-      .split(":")
-      .map(Number);
+  const configs = [
+    { start: "09:30", end: "10:30", score: 0.8, label: "late morning" },
+    { start: "11:00", end: "12:00", score: 0.72, label: "late morning" },
+    { start: "14:00", end: "15:00", score: 0.62, label: "early afternoon" },
+  ];
 
-    const [endHour, endMinute] = String(window.end)
-      .split(":")
-      .map(Number);
+  return configs.map((item) => {
+    const [startHour, startMinute] = item.start.split(":").map(Number);
+    const [endHour, endMinute] = item.end.split(":").map(Number);
 
     const start = new Date(today);
-    start.setHours(startHour || 9, startMinute || 30, 0, 0);
+    start.setHours(startHour, startMinute, 0, 0);
 
     const end = new Date(today);
-    end.setHours(endHour || 10, endMinute || 30, 0, 0);
+    end.setHours(endHour, endMinute, 0, 0);
 
     return {
       startIso: start.toISOString(),
       endIso: end.toISOString(),
-      score: Number(window.score) || 0.8,
+      score: item.score,
+      label: item.label,
     };
   });
-
-  return {
-    rules: user,
-    patternProfile,
-    recentFeedback,
-    availableWindows,
-  };
 }
 
-export async function runLocalPlanner(
-  userId: string
-): Promise<PlannerOutput> {
-  const input = await buildPlannerInput(userId);
-
+function categoryScoreFromProfile(patternProfile: any, category: LeverCategory) {
   const rankings =
-    (input.patternProfile?.leverRankings as Array<{
+    (patternProfile?.leverRankings as Array<{
       category: string;
       score: number;
     }>) ?? [];
 
-  const topCategory =
-    [...rankings].sort((a, b) => b.score - a.score)[0]?.category ??
-    "income";
+  const found = rankings.find((item) => item.category === category);
 
-  const safeCategory = allowedCategories.includes(topCategory)
-    ? topCategory
-    : "income";
+  return found?.score ?? 0.5;
+}
 
-  const positiveSignals = input.recentFeedback.filter(
-    (feedback) =>
-      feedback.result === "crushed" &&
-      feedback.needleMover === "yes"
-  );
+function buildWhy(candidate: PlannerCandidate, input: PlannerInput) {
+  const reasons = [...candidate.reasonSignals];
 
-  const confidence = Math.min(95, 70 + positiveSignals.length * 3);
+  if (candidate.overdue) {
+    reasons.push("it is overdue");
+  }
 
-  const leverMap: Record<string, string> = {
-    income: "move the highest-impact income task forward",
-    health: "protect the habit that improves your energy",
-    family: "handle the family item creating background stress",
-    admin: "clear the admin task blocking deeper work",
-    learning: "complete the learning block that compounds your skill",
-    creative: "ship the creative draft with the most momentum",
-  };
+  if (candidate.energyScore >= 18) {
+    reasons.push(`your ${input.contextSignals.energyWindowLabel} window has been productive`);
+  }
 
-  return {
-    leverTitle: leverMap[safeCategory] ?? leverMap.income,
-    leverCategory: safeCategory,
-    why:
-      "This matches your strongest recent pattern based on completed blocks, needle-mover feedback, and time-window fit.",
-    plan: [
-      "Open the exact task or workspace.",
-      "Work for one protected block with no context switching.",
-      "Capture the next action before stopping.",
-    ],
-    alternatives: [
-      { title: "clear one small admin blocker", category: "admin" },
-      { title: "complete one learning rep", category: "learning" },
-    ],
-    confidence,
-  };
+  if (input.contextSignals.meetingDensityScore >= 15) {
+    reasons.push("your calendar density makes protected execution more important today");
+  }
+
+  if (input.contextSignals.completedStreakDays > 0) {
+    reasons.push(`you have a ${input.contextSignals.completedStreakDays}-day completion streak to protect`);
+  }
+
+  const unique = [...new Set(reasons)].slice(0, 3);
+
+  if (unique.length === 0) {
+    return "This is the strongest current needle-mover based on your recent completion pattern.";
+  }
+
+  return `This matters now because ${unique.join(", ")}.`;
+}
+
+function buildPlan(candidate: PlannerCandidate) {
+  if (candidate.overdue) {
+    return [
+      "Open the overdue task and identify the smallest finishable piece.",
+      "Work for one protected block without switching context.",
+      "Leave a clear next action or mark it complete.",
+    ];
+  }
+
+  if (candidate.category === "learning") {
+    return [
+      "Open the exact lesson, lab, or note.",
+      "Complete one focused learning rep.",
+      "Write a 3-line summary before stopping.",
+    ];
+  }
+
+  if (candidate.category === "income") {
+    return [
+      "Open the revenue-impact task or proposal.",
+      "Ship the smallest valuable progress today.",
+      "Capture the next money-moving action.",
+    ];
+  }
+
+  if (candidate.category === "health") {
+    return [
+      "Choose the one health action with the highest payoff.",
+      "Protect the time block from interruptions.",
+      "Record whether it improved your energy.",
+    ];
+  }
+
+  return [
+    "Open the task or workspace.",
+    "Work for the protected focus block.",
+    "Capture the next action before stopping.",
+  ];
 }
 
 function sanitizePlannerOutput(output: PlannerOutput): PlannerOutput {
-  const category = allowedCategories.includes(output.leverCategory)
-    ? output.leverCategory
-    : "admin";
+  const category = normalizeCategory(output.leverCategory);
 
   return {
     leverTitle:
@@ -159,12 +257,10 @@ function sanitizePlannerOutput(output: PlannerOutput): PlannerOutput {
       "protect your highest-leverage task",
     leverCategory: category,
     why:
-      output.why?.slice(0, 180) ||
+      output.why?.slice(0, 220) ||
       "This is the best current needle-mover based on your recent patterns.",
     plan: Array.isArray(output.plan)
-      ? output.plan
-          .slice(0, 3)
-          .map((item) => String(item).slice(0, 100))
+      ? output.plan.slice(0, 3).map((item) => String(item).slice(0, 120))
       : [
           "Start the task.",
           "Protect the block.",
@@ -173,15 +269,336 @@ function sanitizePlannerOutput(output: PlannerOutput): PlannerOutput {
     alternatives: Array.isArray(output.alternatives)
       ? output.alternatives.slice(0, 2).map((alt) => ({
           title: String(alt.title ?? "alternate focus task").slice(0, 90),
-          category: allowedCategories.includes(alt.category)
-            ? alt.category
-            : "admin",
+          category: normalizeCategory(alt.category),
         }))
       : [],
-    confidence: Math.max(
-      40,
-      Math.min(95, Number(output.confidence) || 70)
-    ),
+    confidence: clamp(Number(output.confidence) || 70, 40, 95),
+  };
+}
+
+export async function buildPlannerInput(
+  userId: string
+): Promise<PlannerInput> {
+  await ensureUser(userId);
+
+  const now = new Date();
+
+  const since30 = new Date(now);
+  since30.setDate(now.getDate() - 30);
+
+  const since14 = new Date(now);
+  since14.setDate(now.getDate() - 14);
+
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - 7);
+
+  const [user, patternProfile, recentFeedback, recentBlocks, recentTasks] =
+    await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+      }),
+
+      prisma.patternProfile.findUnique({
+        where: { userId },
+      }),
+
+      prisma.feedback.findMany({
+        where: {
+          userId,
+          createdAt: {
+            gte: since30,
+          },
+        },
+        include: {
+          focusBlock: true,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 30,
+      }),
+
+      prisma.focusBlock.findMany({
+        where: {
+          userId,
+          startIso: {
+            gte: since30,
+          },
+        },
+        orderBy: {
+          startIso: "desc",
+        },
+      }),
+
+      prisma.task.findMany({
+        where: {
+          userId,
+          OR: [
+            {
+              startIso: {
+                gte: since30,
+              },
+            },
+            {
+              dueDateIso: {
+                not: null,
+              },
+            },
+            {
+              status: {
+                in: ["unscheduled", "scheduled", "started"],
+              },
+            },
+          ],
+        },
+        orderBy: [{ dueDateIso: "asc" }, { createdAt: "desc" }],
+        take: 50,
+      }),
+    ]);
+
+  const bestWindowsRaw =
+    (patternProfile?.bestWindows as Array<{
+      start: string;
+      end: string;
+      score: number;
+    }>) ?? [];
+
+  const availableWindows =
+    bestWindowsRaw.length > 0
+      ? bestWindowsRaw.slice(0, 3).map((window) => {
+          const today = new Date();
+          const [startHour, startMinute] = String(window.start)
+            .split(":")
+            .map(Number);
+          const [endHour, endMinute] = String(window.end)
+            .split(":")
+            .map(Number);
+
+          const start = new Date(today);
+          start.setHours(startHour || 9, startMinute || 30, 0, 0);
+
+          const end = new Date(today);
+          end.setHours(endHour || 10, endMinute || 30, 0, 0);
+
+          return {
+            startIso: start.toISOString(),
+            endIso: end.toISOString(),
+            score: Number(window.score) || 0.6,
+            label: getWindowLabel(start),
+          };
+        })
+      : getDefaultWindows();
+
+  const completedStreakDays = calculateStreakDays(recentBlocks, recentTasks);
+
+  const last14Items = [
+    ...recentBlocks.filter((block) => block.startIso >= since14),
+    ...recentTasks.filter((task) => task.startIso && task.startIso >= since14),
+  ];
+
+  const completedLast14 = last14Items.filter(
+    (item) => item.status === "completed"
+  ).length;
+
+  const missedLast7Days =
+    recentBlocks.filter(
+      (block) => block.startIso >= weekStart && block.status === "missed"
+    ).length +
+    recentTasks.filter(
+      (task) => task.startIso && task.startIso >= weekStart && task.status === "missed"
+    ).length;
+
+  const completionRateLast14Days =
+    last14Items.length === 0 ? 0 : completedLast14 / last14Items.length;
+
+  const todayScheduledItems =
+    recentBlocks.filter((block) => isSameDay(block.startIso, now)).length +
+    recentTasks.filter((task) => task.startIso && isSameDay(task.startIso, now))
+      .length;
+
+  const meetingDensityScore = clamp(todayScheduledItems * 8, 0, 24);
+
+  const bestWindow = availableWindows.sort((a, b) => b.score - a.score)[0];
+  const bestWindowScore = clamp((bestWindow?.score ?? 0.6) * 25, 0, 25);
+  const energyWindowLabel = bestWindow?.label ?? "late morning";
+
+  const overdueTaskCount = recentTasks.filter(
+    (task) =>
+      task.dueDateIso &&
+      task.dueDateIso < now &&
+      task.status !== "completed"
+  ).length;
+
+  const scheduledTaskCount = recentTasks.filter(
+    (task) => task.status === "scheduled"
+  ).length;
+
+  const candidateTasks: PlannerCandidate[] = recentTasks
+    .filter((task) => task.status !== "completed")
+    .map((task) => {
+      const category = normalizeCategory(task.category);
+      const overdue = Boolean(task.dueDateIso && task.dueDateIso < now);
+      const dueDate = task.dueDateIso ? new Date(task.dueDateIso) : null;
+      const daysOverdue = overdue && dueDate ? Math.max(1, daysBetween(now, dueDate)) : 0;
+
+      const historicalScore = categoryScoreFromProfile(patternProfile, category) * 30;
+      const urgencyScore = overdue
+        ? clamp(16 + daysOverdue * 3, 16, 30)
+        : task.dueDateIso
+          ? 10
+          : 4;
+
+      const streakScore = completedStreakDays > 0 ? clamp(6 + completedStreakDays, 0, 15) : 0;
+      const energyScore = bestWindowScore;
+      const scheduledPenalty = task.status === "scheduled" ? -4 : 0;
+
+      const totalScore =
+        historicalScore +
+        urgencyScore +
+        streakScore +
+        meetingDensityScore +
+        energyScore +
+        scheduledPenalty;
+
+      const reasonSignals: string[] = [];
+
+      if (overdue) reasonSignals.push("it is overdue");
+      if (historicalScore >= 20) reasonSignals.push(`${category} has been a strong lever`);
+      if (streakScore > 0) reasonSignals.push("it protects your current progress streak");
+      if (energyScore >= 15) reasonSignals.push("it fits your best time window");
+
+      return {
+        id: task.id,
+        source: "task",
+        title: task.title,
+        category,
+        dueDateIso: task.dueDateIso?.toISOString() ?? null,
+        overdue,
+        scheduled: task.status === "scheduled",
+        historicalScore,
+        urgencyScore,
+        streakScore,
+        meetingDensityScore,
+        energyScore,
+        totalScore,
+        reasonSignals,
+      };
+    });
+
+  const profileFallbackCandidates: PlannerCandidate[] = (
+    (patternProfile?.leverRankings as Array<{
+      category: string;
+      score: number;
+    }>) ?? []
+  )
+    .slice(0, 3)
+    .map((item) => {
+      const category = normalizeCategory(item.category);
+      const historicalScore = Number(item.score ?? 0.5) * 30;
+      const energyScore = bestWindowScore;
+
+      return {
+        id: `pattern_${category}`,
+        source: "focus_pattern",
+        title: `move the highest-impact ${category} lever forward`,
+        category,
+        dueDateIso: null,
+        overdue: false,
+        scheduled: false,
+        historicalScore,
+        urgencyScore: 6,
+        streakScore: completedStreakDays > 0 ? 8 : 0,
+        meetingDensityScore,
+        energyScore,
+        totalScore:
+          historicalScore +
+          6 +
+          (completedStreakDays > 0 ? 8 : 0) +
+          meetingDensityScore +
+          energyScore,
+        reasonSignals: [
+          `${category} has been one of your stronger lever categories`,
+          "it fits your current learned pattern",
+        ],
+      };
+    });
+
+  const fallbackCandidates: PlannerCandidate[] = [
+  {
+    id: "fallback_admin",
+    source: "focus_pattern",
+    title: "clear the highest-friction admin blocker",
+    category: "admin",
+    dueDateIso: null,
+    overdue: false,
+    scheduled: false,
+    historicalScore: 15,
+    urgencyScore: 8,
+    streakScore: 0,
+    meetingDensityScore,
+    energyScore: bestWindowScore,
+    totalScore: 15 + 8 + meetingDensityScore + bestWindowScore,
+    reasonSignals: ["it reduces friction before deeper work"],
+  },
+];
+
+const allCandidates: PlannerCandidate[] =
+  candidateTasks.length > 0
+    ? candidateTasks
+    : profileFallbackCandidates.length > 0
+      ? profileFallbackCandidates
+      : fallbackCandidates;
+
+  return {
+    rules: user,
+    patternProfile,
+    recentFeedback,
+    recentBlocks,
+    recentTasks,
+    candidateTasks: allCandidates.sort((a, b) => b.totalScore - a.totalScore),
+    availableWindows,
+    contextSignals: {
+      overdueTaskCount,
+      scheduledTaskCount,
+      completedStreakDays,
+      missedLast7Days,
+      completionRateLast14Days,
+      meetingDensityScore,
+      bestWindowScore,
+      energyWindowLabel,
+    },
+  };
+}
+
+export async function runLocalPlanner(
+  userId: string
+): Promise<PlannerOutput> {
+  const input = await buildPlannerInput(userId);
+  const candidates = input.candidateTasks;
+
+  const best = candidates[0];
+
+  const alternatives = candidates.slice(1, 3).map((candidate) => ({
+    title: candidate.title,
+    category: candidate.category,
+  }));
+
+  const confidence = clamp(
+    50 +
+      best.totalScore / 2 +
+      input.contextSignals.completionRateLast14Days * 10 -
+      input.contextSignals.missedLast7Days * 2,
+    45,
+    95
+  );
+
+  return {
+    leverTitle: best.title,
+    leverCategory: best.category,
+    why: buildWhy(best, input),
+    plan: buildPlan(best),
+    alternatives,
+    confidence: Math.round(confidence),
   };
 }
 
@@ -201,21 +618,20 @@ export async function runAiPlanner(
         {
           role: "system",
           content:
-            "You are the Focus20 planner. Pick exactly one highest-leverage outcome for today. Keep output calm, concise, and action-oriented. Never schedule directly. Never mention formulas. Use only allowed categories.",
+            "You are Focus20's AI-first Deployment Coach. Pick exactly one highest-leverage outcome for today. Be calm, specific, and decisive. Use the candidate scores, overdue pressure, completion streak, meeting density, and energy window. Do not mention formulas. Do not create long lists. Return JSON only.",
         },
         {
           role: "user",
           content: JSON.stringify({
-            rules: input.rules,
-            patternProfile: input.patternProfile,
-            recentFeedback: input.recentFeedback.map((feedback) => ({
+            candidates: input.candidateTasks.slice(0, 8),
+            availableWindows: input.availableWindows,
+            contextSignals: input.contextSignals,
+            recentFeedback: input.recentFeedback.slice(0, 10).map((feedback) => ({
               result: feedback.result,
               needleMover: feedback.needleMover,
               category: feedback.focusBlock?.leverCategory,
-              startIso: feedback.focusBlock?.startIso,
               status: feedback.focusBlock?.status,
             })),
-            availableWindows: input.availableWindows,
           }),
         },
       ],
@@ -280,10 +696,7 @@ export async function runAiPlanner(
 
     return sanitizePlannerOutput(parsed);
   } catch (error) {
-    console.error(
-      "AI planner failed. Falling back to local planner.",
-      error
-    );
+    console.error("AI planner failed. Falling back to local planner.", error);
 
     return runLocalPlanner(userId);
   }

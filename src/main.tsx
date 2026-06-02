@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { ClerkProvider } from "@clerk/clerk-react";
 import App from "./App";
 import "./index.css";
+import { reconcileAfterReconnect } from "./services/offlineSync";
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -38,3 +39,10 @@ ReactDOM.createRoot(
     </ClerkProvider>
   </React.StrictMode>
 );
+window.addEventListener("online", () => {
+  reconcileAfterReconnect();
+});
+
+if (navigator.onLine) {
+  reconcileAfterReconnect();
+}

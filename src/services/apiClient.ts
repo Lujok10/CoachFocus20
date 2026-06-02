@@ -9,6 +9,8 @@ export function setClerkTokenProvider(provider: () => Promise<string | null>) {
   clerkTokenProvider = provider;
 }
 
+
+
 export async function request<T>(
   path: string,
   options: RequestInit = {}

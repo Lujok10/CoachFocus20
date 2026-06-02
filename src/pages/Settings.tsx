@@ -47,14 +47,7 @@ export function Settings() {
   const [statusMessage, setStatusMessage] = useState("");
   const { canInstall, install } = usePwaInstall();
 
-  useEffect(() => {
-    apiGetUserRules()
-      .then((remoteRules) => {
-        setRules(remoteRules);
-        setBackendOnline(true);
-      })
-      .catch(() => setBackendOnline(false));
-  }, []);
+
 
   useEffect(() => {
   apiGetUserRules()

@@ -191,6 +191,59 @@ export async function getWeeklyInsights(userId: string) {
     })),
   ].slice(0, 3);
 
+
+  const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const trend = Array.from({ length: 7 }).map((_, index) => {
+  const day = new Date(weekStart);
+  day.setDate(weekStart.getDate() + index);
+
+  const nextDay = new Date(day);
+  nextDay.setDate(day.getDate() + 1);
+
+  const dayBlocks = blocks.filter(
+    (block) => block.startIso >= day && block.startIso < nextDay
+  );
+
+  const dayTasks = tasks.filter(
+    (task) => task.startIso && task.startIso >= day && task.startIso < nextDay
+  );
+
+  const protectedMinutes =
+    dayBlocks.reduce(
+      (total, block) =>
+        total + minutesBetween(block.startIso, block.endIso),
+      0
+    ) +
+    dayTasks.reduce(
+      (total, task) =>
+        total + minutesBetween(task.startIso, task.endIso),
+      0
+    );
+
+  const completedMinutes =
+    dayBlocks
+      .filter((block) => block.status === "completed")
+      .reduce(
+        (total, block) =>
+          total + minutesBetween(block.startIso, block.endIso),
+        0
+      ) +
+    dayTasks
+      .filter((task) => task.status === "completed")
+      .reduce(
+        (total, task) =>
+          total + minutesBetween(task.startIso, task.endIso),
+        0
+      );
+
+  return {
+    day: dayLabels[day.getDay()],
+    protectedMinutes,
+    completedMinutes,
+  };
+});
+
   return {
     weekStart,
     generatedAt: now,
@@ -205,6 +258,7 @@ export async function getWeeklyInsights(userId: string) {
     },
     topLevers,
     timeLeaks,
+    trend,
     shareText: `This week I protected ${protectedMinutes} minutes for high-leverage work and completed ${completedMinutes} minutes. Completion rate: ${completionRate}%.`,
   };
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { WeeklyReportCard } from "../components/WeeklyReportCard";
 import { motion } from "framer-motion";
 import {
   Award,
@@ -101,7 +102,7 @@ export function Insights() {
           </p>
         </div>
       </header>
-
+<WeeklyReportCard insights={insights} />
       <div className="space-y-4 px-4 py-4">
         <motion.section
           initial={{ opacity: 0, y: 10 }}

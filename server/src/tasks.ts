@@ -1,4 +1,5 @@
 import { prisma, ensureUser } from "./db";
+import { chooseSmartSlot } from "./scheduler";
 import { rebuildPatternProfile } from "./patterns";
 import {
   googleCreateOrUpdateFocusEvent,
@@ -87,13 +88,25 @@ export async function scheduleTask(
     throw new Error("Task not found.");
   }
 
-  const start = input.startIso
-    ? new Date(input.startIso)
-    : task.startIso ?? new Date();
+  const smartSlot =
+  input.startIso || task.startIso
+    ? null
+    : await chooseSmartSlot({
+        userId,
+        durationMinutes: input.durationMinutes ?? 60,
+        category: task.category ?? "admin",
+        includeGoogleBusy: true,
+      });
 
-  const end = input.endIso
-    ? new Date(input.endIso)
-    : task.endIso ?? computeEnd(start, input.durationMinutes ?? 60);
+const start = input.startIso
+  ? new Date(input.startIso)
+  : task.startIso ?? smartSlot?.start ?? new Date();
+
+const end = input.endIso
+  ? new Date(input.endIso)
+  : task.endIso ??
+    smartSlot?.end ??
+    computeEnd(start, input.durationMinutes ?? 60);
 
   let provider = "local";
   let providerEventId: string | null = task.providerEventId ?? null;
@@ -145,27 +158,34 @@ export async function scheduleTask(
   });
 
   const action = await prisma.actionsLog.create({
-    data: {
-      userId,
-      actionType: "schedule_task",
-      payload: {
-        taskId,
-        title: updated.title,
-        provider,
-        providerEventId,
-        startIso: start.toISOString(),
-        endIso: end.toISOString(),
-        calendarWriteStatus,
-        calendarWriteError,
-      },
-      undoPayload: {
-        taskId,
-        providerEventId,
-        operation: providerEventId ? "delete_google_event" : "unschedule_task",
-      },
-    },
-  });
+        data: {
+          userId: task.userId,
+          actionType: "schedule_task",
+          payload: {
+            taskId,
+            title: updated.title,
+            providerEventId,
+            startIso: start.toISOString(),
+            endIso: end.toISOString(),
 
+            scheduler: smartSlot
+              ? {
+                  score: smartSlot.score,
+                  reasons: smartSlot.reasons,
+                  capacity: smartSlot.capacity,
+                }
+              : null,
+          },
+          undoPayload: {
+            taskId,
+            providerEventId,
+            operation: providerEventId
+              ? "delete_google_event"
+              : "unschedule_task",
+          },
+        },
+      });
+      
   return {
     ok: true,
     task: updated,
