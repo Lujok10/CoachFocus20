@@ -1,5 +1,5 @@
 import { Download, Share2, Copy, Flame } from "lucide-react";
-import { apiTrackEvent } from "../services/apiClient";
+//import { apiTrackEvent } from "../services/apiClient";
 import {
   ResponsiveContainer,
   LineChart,
@@ -82,9 +82,9 @@ export function WeeklyReportCard({ insights }: WeeklyReportCardProps) {
 
   const copySummary = async () => {
     await navigator.clipboard.writeText(shareText);
-   apiTrackEvent("weekly_report_shared", {
-  method: "copy",
-    }).catch(console.error);
+  //  apiTrackEvent("weekly_report_shared", {
+  // method: "copy",
+  //   }).catch(console.error);
       };
 
   const shareReport = async () => {
@@ -94,9 +94,9 @@ export function WeeklyReportCard({ insights }: WeeklyReportCardProps) {
         text: shareText,
       });
 
-     apiTrackEvent("weekly_report_shared", {
-      method: "copy",
-    }).catch(console.error);
+    //  apiTrackEvent("weekly_report_shared", {
+    //   method: "copy",
+    // }).catch(console.error);
 
       return;
     }
@@ -105,9 +105,9 @@ export function WeeklyReportCard({ insights }: WeeklyReportCardProps) {
   };
 
   const printOrSavePdf = () => {
-   apiTrackEvent("weekly_report_shared", {
-      method: "copy",
-    }).catch(console.error);
+  //  apiTrackEvent("weekly_report_shared", {
+  //     method: "copy",
+  //   }).catch(console.error);
 
     window.print();
   };
@@ -140,9 +140,9 @@ export function WeeklyReportCard({ insights }: WeeklyReportCardProps) {
 
     URL.revokeObjectURL(url);
 
-    apiTrackEvent("weekly_report_shared", {
-        method: "copy",
-      }).catch(console.error);
+    // apiTrackEvent("weekly_report_shared", {
+    //     method: "copy",
+    //   }).catch(console.error);
   };
 
   return (
