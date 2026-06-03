@@ -1,13 +1,6 @@
 import { useEffect, useState } from "react";
-import { WeeklyReportCard } from "../components/WeeklyReportCard";
 import { motion } from "framer-motion";
-import {
-  Award,
-  Clock,
-  Share2,
-  Target,
-  Zap,
-} from "lucide-react";
+import { Award, Clock, Share2, Target, Zap } from "lucide-react";
 import { apiWeeklyInsights } from "../services/apiClient";
 
 type WeeklyInsights = {
@@ -102,7 +95,7 @@ export function Insights() {
           </p>
         </div>
       </header>
-<WeeklyReportCard insights={insights} />
+
       <div className="space-y-4 px-4 py-4">
         <motion.section
           initial={{ opacity: 0, y: 10 }}
@@ -119,7 +112,7 @@ export function Insights() {
               className="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-100"
             >
               <Share2 className="h-3.5 w-3.5" />
-              {copyStatus || "Share"}
+              {copyStatus || "Copy Summary"}
             </button>
           </div>
 
