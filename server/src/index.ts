@@ -7,6 +7,10 @@ import { clerkMiddleware } from "@clerk/express";
 import { prisma, ensureDemoUser, ensureUser } from "./db";
 import { validateEnv } from "./env";
 import { getRequestUserId } from "./auth";
+import multer from "multer";
+import fs from "fs";
+import { transcribeAndAnalyzeAudio } from "./voice";
+
 
 import {
   applyFlexShift,
@@ -66,6 +70,13 @@ const allowedOrigins = [
   "http://localhost:5175",
 ].filter(Boolean) as string[];
 
+const upload = multer({
+  dest: "uploads/",
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+  },
+});
+
 function isAllowedOrigin(origin?: string) {
   if (!origin) return true;
 
@@ -105,6 +116,50 @@ app.use(
     publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
     audience: "focus20-api",
   })
+);
+app.post(
+  "/api/voice/checkin",
+  upload.single("audio"),
+  async (req, res, next) => {
+    try {
+      const focusBlockId = String(req.body?.focusBlockId ?? "");
+
+      if (!focusBlockId) {
+        res.status(400).json({
+          ok: false,
+          error: "Missing focusBlockId.",
+        });
+        return;
+      }
+
+      if (!req.file?.path) {
+        res.status(400).json({
+          ok: false,
+          error: "Missing audio file.",
+        });
+        return;
+      }
+
+      const analysis = await transcribeAndAnalyzeAudio(req.file.path);
+
+      const checkin = await recordCheckin({
+        focusBlockId,
+        result: analysis.suggestedResult,
+        needleMover: analysis.suggestedNeedleMover,
+        noteText: `[Voice] ${analysis.transcript}\n\nMood: ${analysis.mood}\nContext: ${analysis.context}`,
+      });
+
+      fs.unlink(req.file.path, () => {});
+
+      res.json({
+        ok: true,
+        analysis,
+        checkin,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 );
 
 async function getHealthStatus() {

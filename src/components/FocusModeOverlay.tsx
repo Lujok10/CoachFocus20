@@ -3,6 +3,8 @@ import { motion } from "framer-motion";
 import { X, Play, Pause, Check } from "lucide-react";
 import { WakePlan } from "../types";
 import { showLocalNotification } from "../services/pwaNotifications";
+import { VoiceCheckinRecorder } from "./VoiceCheckinRecorder";
+
 interface FocusModeOverlayProps {
   wakePlan: WakePlan;
   onClose: () => void;
@@ -63,20 +65,16 @@ export function FocusModeOverlay({
 
       setSecondsLeft(remaining);
 
-      showLocalNotification("Focus20 session complete", {
-        body: "Great work. Complete your quick check-in.",
-      });
-
       if (remaining <= 0 && !completedRef.current) {
-          completedRef.current = true;
-          localStorage.removeItem(storageKey);
-          setIsRunning(false);
-          setIsComplete(true);
+        completedRef.current = true;
+        localStorage.removeItem(storageKey);
+        setIsRunning(false);
+        setIsComplete(true);
 
-          showLocalNotification("Focus20 session complete", {
-            body: "Great work. Complete your quick check-in.",
-          });
-        }
+        showLocalNotification("Focus20 session complete", {
+          body: "Great work. Complete your quick check-in.",
+        });
+      }
     };
 
     tick();
@@ -143,16 +141,16 @@ export function FocusModeOverlay({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-900/95 p-6"
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/95 p-6"
     >
       <button
         onClick={onClose}
-        className="absolute right-6 top-6 p-2 text-slate-400 transition-colors hover:text-white"
+        className="fixed right-6 top-6 z-10 p-2 text-slate-400 transition-colors hover:text-white"
       >
         <X className="h-6 w-6" />
       </button>
 
-      <div className="max-w-md text-center">
+      <div className="mx-auto flex min-h-full max-w-md flex-col items-center justify-center py-10 text-center">
         <motion.h2
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -238,17 +236,30 @@ export function FocusModeOverlay({
               className="flex items-center gap-2 rounded-full bg-emerald-500 px-6 py-3 font-medium text-white transition-colors hover:bg-emerald-600"
             >
               <Check className="h-5 w-5" />
-              Complete & Check-in
+              Done
             </motion.button>
           )}
         </div>
 
-        {!isComplete && (
+        {isComplete ? (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-8 w-full"
+          >
+            <VoiceCheckinRecorder
+              focusBlockId={wakePlan.block.id}
+              onComplete={() => {
+                onComplete();
+              }}
+            />
+          </motion.div>
+        ) : (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3 }}
-            className="mt-8 text-left"
+            className="mt-8 w-full text-left"
           >
             <p className="mb-3 text-xs font-medium uppercase tracking-wider text-slate-500">
               Your plan
