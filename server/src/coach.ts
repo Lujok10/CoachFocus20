@@ -11,6 +11,11 @@ import { runAiPlanner } from "./planner";
 import { ensurePatternProfile, rebuildPatternProfile } from "./patterns";
 import { trackAnalytics } from "./analytics";
 
+import {
+  scheduleFocusBlockNotifications,
+  scheduleEndOfDayCheckin,
+} from "./push";
+
 type ReservationStatus = "reserved" | "suggested" | "queued" | "cancelled";
 
 type LeverCategory =
@@ -366,6 +371,17 @@ export async function refreshWakePlan(userId: string, force = false) {
       },
     });
   }
+
+  if (rules.notificationsEnabled && rules.completedFirstLever) {
+  await scheduleFocusBlockNotifications({
+    userId,
+    focusBlockId: block.id,
+    title: block.title,
+    startIso: block.startIso.toISOString(),
+  }).catch(console.error);
+
+  await scheduleEndOfDayCheckin(userId).catch(console.error);
+}
 
   let providerEventId = block.providerEventId;
   let reservationStatus: ReservationStatus = canWriteToCalendar

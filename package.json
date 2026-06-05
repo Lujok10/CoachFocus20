@@ -31,7 +31,8 @@
     "react-dom": "latest",
     "recharts": "^3.8.1",
     "typescript": "latest",
-    "vite": "latest"
+    "vite": "latest",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/cors": "latest",
@@ -39,6 +40,7 @@
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "@types/web-push": "^3.6.4",
     "autoprefixer": "latest",
     "concurrently": "latest",
     "postcss": "latest",

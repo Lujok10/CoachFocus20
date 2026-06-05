@@ -60,6 +60,7 @@ enum LeverCategory {
   creative
 }
 
+
 model User {
   id                 String              @id @default(cuid())
   email              String?             @unique
@@ -84,7 +85,11 @@ model User {
   actions            ActionsLog[]
   analytics          AnalyticsEvent[]
   calendarWriteQueue CalendarWriteQueue[]
+  pushSubscriptions  PushSubscription[]
+  notificationJobs   NotificationJob[]
+  notificationPreference NotificationPreference?
   patternProfile     PatternProfile?
+
 }
 
 model GoogleCalendarConnection {
@@ -121,6 +126,57 @@ model FocusBlock {
 
   @@index([userId, startIso])
 }
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh     String
+  auth      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model NotificationPreference {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  quietHoursEnabled Boolean  @default(true)
+  quietStartHour    Int      @default(22)
+  quietEndHour      Int      @default(7)
+  maxPerDay         Int      @default(2)
+  timezone          String   @default("America/New_York")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model NotificationJob {
+  id           String    @id @default(cuid())
+  userId       String
+  type         String
+  title        String
+  body         String
+  url          String?
+  tag          String?
+  scheduledFor DateTime
+  sentAt       DateTime?
+  status       String    @default("pending")
+  retries      Int       @default(0)
+  lastError    String?
+  payload      Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledFor])
+  @@index([userId, scheduledFor])
+}
+
+
 
 model Feedback {
   id           String     @id @default(cuid())

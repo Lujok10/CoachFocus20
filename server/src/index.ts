@@ -40,6 +40,14 @@ import {
   resetPatternProfile,
 } from "./userControls";
 
+import {
+  savePushSubscription,
+  deletePushSubscription,
+  sendPushToUser,
+  processNotificationQueue,
+  scheduleEndOfDayCheckin,
+} from "./push";
+
 const env = validateEnv();
 
 const PORT = env.apiPort;
@@ -492,3 +500,67 @@ ensureDemoUser()
     console.error("Failed to start Focus20 API:", error);
     process.exit(1);
   });
+
+  app.post("/api/push/subscribe", async (req, res, next) => {
+  try {
+    const userId = getRequestUserId(req);
+    res.json(await savePushSubscription(userId, req.body));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/push/unsubscribe", async (req, res, next) => {
+  try {
+    const userId = getRequestUserId(req);
+    res.json(
+      await deletePushSubscription(userId, String(req.body?.endpoint ?? ""))
+    );
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/push/test", async (req, res, next) => {
+  try {
+    const userId = getRequestUserId(req);
+
+    res.json(
+      await sendPushToUser(userId, {
+        title: "Focus20 notifications are ready",
+        body: "You’ll get reminders when your protected block is coming up.",
+        url: "/",
+        tag: "focus20-test",
+      })
+    );
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/notifications/end-of-day", async (req, res, next) => {
+  try {
+    const userId = getRequestUserId(req);
+    res.json(await scheduleEndOfDayCheckin(userId));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/cron/notifications", async (req, res, next) => {
+  try {
+    const secret = req.headers["x-cron-secret"];
+
+    if (
+      process.env.CRON_SECRET &&
+      secret !== process.env.CRON_SECRET
+    ) {
+      res.status(401).json({ ok: false, error: "Unauthorized cron." });
+      return;
+    }
+
+    res.json(await processNotificationQueue());
+  } catch (error) {
+    next(error);
+  }
+});

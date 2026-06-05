@@ -294,3 +294,7 @@ export async function apiTrackEvent(
     }),
   });
 }
+
+export async function authFetch(path: string, options?: RequestInit) {
+  return request(path, options);
+}
