@@ -6,11 +6,20 @@ import { trackAnalytics } from "./analytics";
 const publicKey = process.env.VAPID_PUBLIC_KEY;
 const privateKey = process.env.VAPID_PRIVATE_KEY;
 const subject = process.env.VAPID_SUBJECT ?? "mailto:support@focus20.app";
-
-if (publicKey && privateKey) {
-  webpush.setVapidDetails(subject, publicKey, privateKey);
+try {
+  if (publicKey && privateKey) {
+    webpush.setVapidDetails(
+      subject,
+      publicKey.trim(),
+      privateKey.trim()
+    );
+  }
+} catch (error) {
+  console.error(
+    "Invalid VAPID configuration. Push notifications disabled.",
+    error
+  );
 }
-
 type PushPayload = {
   title: string;
   body: string;
