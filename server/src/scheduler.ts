@@ -14,23 +14,8 @@ type SchedulerInput = {
   includeGoogleBusy?: boolean;
 };
 
-type CandidateSlot = {
-  start: Date;
-  end: Date;
-  score: number;
-  reasons: string[];
-};
-
 function addMinutes(date: Date, minutes: number) {
   return new Date(date.getTime() + minutes * 60_000);
-}
-
-function minutesBetween(start: Date, end: Date) {
-  return Math.round((end.getTime() - start.getTime()) / 60000);
-}
-
-function overlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) {
-  return aStart < bEnd && aEnd > bStart;
 }
 
 function startOfDay(date: Date) {
@@ -45,6 +30,10 @@ function endOfDay(date: Date) {
   return value;
 }
 
+function overlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) {
+  return aStart < bEnd && aEnd > bStart;
+}
+
 function parseBusy(items: BusyItem[]) {
   return items
     .map((item) => ({
@@ -56,17 +45,6 @@ function parseBusy(items: BusyItem[]) {
         !Number.isNaN(item.start.getTime()) &&
         !Number.isNaN(item.end.getTime())
     );
-}
-
-function windowKey(date: Date) {
-  const hour = date.getHours();
-
-  if (hour < 10) return "early_morning";
-  if (hour < 12) return "late_morning";
-  if (hour < 15) return "early_afternoon";
-  if (hour < 18) return "late_afternoon";
-
-  return "evening";
 }
 
 function defaultWindowsForDate(date: Date) {
@@ -100,7 +78,8 @@ function generateCandidateSlots(
   durationMinutes: number,
   stepMinutes = 30
 ) {
-  const slots: CandidateSlot[] = [];
+  const slots = [];
+
   const dayStart = new Date(date);
   dayStart.setHours(8, 0, 0, 0);
 
@@ -114,7 +93,7 @@ function generateCandidateSlots(
       start: new Date(cursor),
       end: addMinutes(cursor, durationMinutes),
       score: 0,
-      reasons: [],
+      reasons: [] as string[],
     });
 
     cursor = addMinutes(cursor, stepMinutes);
@@ -157,6 +136,7 @@ async function getLocalBusy(userId: string, dayStart: Date, dayEnd: Date) {
       start: block.startIso,
       end: block.endIso,
     })),
+
     ...tasks
       .filter((task) => task.startIso && task.endIso)
       .map((task) => ({
@@ -216,13 +196,8 @@ async function getPatternWindows(userId: string, date: Date) {
   }
 
   return windows.slice(0, 5).map((window) => {
-    const [startHour, startMinute] = String(window.start)
-      .split(":")
-      .map(Number);
-
-    const [endHour, endMinute] = String(window.end)
-      .split(":")
-      .map(Number);
+    const [startHour, startMinute] = String(window.start).split(":").map(Number);
+    const [endHour, endMinute] = String(window.end).split(":").map(Number);
 
     const start = new Date(date);
     start.setHours(startHour || 9, startMinute || 30, 0, 0);
@@ -239,7 +214,12 @@ async function getPatternWindows(userId: string, date: Date) {
 }
 
 function scoreSlot(input: {
-  slot: CandidateSlot;
+  slot: {
+    start: Date;
+    end: Date;
+    score: number;
+    reasons: string[];
+  };
   busy: Array<{ start: Date; end: Date }>;
   patternWindows: Array<{ start: Date; end: Date; score: number }>;
   buffersMinutes: number;
@@ -341,6 +321,7 @@ export async function chooseSmartSlot(input: SchedulerInput) {
   });
 
   const now = new Date();
+
   const targetDate = input.preferredDateIso
     ? new Date(input.preferredDateIso)
     : now;
@@ -371,16 +352,18 @@ export async function chooseSmartSlot(input: SchedulerInput) {
 
   const busy = [...localBusy, ...googleBusy];
 
-  const candidates = generateCandidateSlots(targetDate, durationMinutes).map(
-    (slot) =>
-      scoreSlot({
-        slot,
-        busy,
-        patternWindows,
-        buffersMinutes,
-        now,
-        capacity,
-      })
+  const candidates = generateCandidateSlots(
+    targetDate,
+    durationMinutes
+  ).map((slot) =>
+    scoreSlot({
+      slot,
+      busy,
+      patternWindows,
+      buffersMinutes,
+      now,
+      capacity,
+    })
   );
 
   const viable = candidates
@@ -394,7 +377,12 @@ export async function chooseSmartSlot(input: SchedulerInput) {
       end: addMinutes(now, 15 + Math.min(durationMinutes, 30)),
       score: 25,
       reasons: ["No ideal slot found, using smallest viable fallback"],
-    } as CandidateSlot);
+    } as {
+      start: Date;
+      end: Date;
+      score: number;
+      reasons: string[];
+    });
 
   return {
     start: chosen.start,
@@ -406,7 +394,6 @@ export async function chooseSmartSlot(input: SchedulerInput) {
       endIso: slot.end.toISOString(),
       score: slot.score,
       reasons: slot.reasons,
-      window: windowKey(slot.start),
     })),
     capacity,
   };

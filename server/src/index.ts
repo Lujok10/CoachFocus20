@@ -52,6 +52,11 @@ import {
   scheduleEndOfDayCheckin,
 } from "./push";
 
+import {
+  getRecoverySuggestion,
+  autoRescheduleMissedWork,
+} from "./recovery";
+
 const env = validateEnv();
 
 const PORT = env.apiPort;
@@ -615,6 +620,24 @@ app.post("/api/cron/notifications", async (req, res, next) => {
     }
 
     res.json(await processNotificationQueue());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/recovery/suggestion", async (req, res, next) => {
+  try {
+    const userId = getRequestUserId(req);
+    res.json(await getRecoverySuggestion(userId));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/recovery/reschedule", async (req, res, next) => {
+  try {
+    const userId = getRequestUserId(req);
+    res.json(await autoRescheduleMissedWork(userId));
   } catch (error) {
     next(error);
   }
