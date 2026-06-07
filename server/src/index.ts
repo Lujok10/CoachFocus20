@@ -30,7 +30,7 @@ import {
 import { getGoogleAuthUrl, handleGoogleCallback } from "./google";
 import { getWeeklyInsights } from "./insights";
 import { retryCalendarWrites } from "./retryQueue";
-
+import { getAdminAnalytics } from "./adminAnalytics";
 import {
   createTask,
   listTasks,
@@ -188,9 +188,28 @@ async function getHealthStatus() {
   }
 }
 
+app.get("/api/admin/analytics", async (_req, res, next) => {
+  try {
+    res.json(await getAdminAnalytics());
+  } catch (error) {
+    next(error);
+  }
+});
 
+app.get("/api/admin/analytics", async (req, res, next) => {
+  try {
+    const secret = req.headers["x-admin-secret"];
 
+    if (process.env.ADMIN_SECRET && secret !== process.env.ADMIN_SECRET) {
+      res.status(401).json({ ok: false, error: "Unauthorized." });
+      return;
+    }
 
+    res.json(await getAdminAnalytics());
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.get("/health", async (_req, res) => {
   const health = await getHealthStatus();

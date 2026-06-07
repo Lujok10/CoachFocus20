@@ -173,6 +173,10 @@ export function Settings() {
       loadSettings();
     }
   }, []);
+    const resetOnboarding = () => {
+      localStorage.removeItem("focus20_onboarding_completed");
+      window.location.reload();
+    };
 
   const updateRules = async (patch: Partial<Rules>) => {
     const nextRules = {
@@ -404,24 +408,35 @@ export function Settings() {
           </div>
         </Section>
 
-        <Section title="Mobile App">
-          <Row
-            icon={Smartphone}
-            label="Install Focus20"
-            description="Add Focus20 to your home screen as a PWA"
-          >
-            {canInstall ? (
+       <Section title="Mobile App">
+            <Row
+              icon={Smartphone}
+              label="Install Focus20"
+              description="Add Focus20 to your home screen as a PWA"
+            >
+              {canInstall ? (
+                <button
+                  onClick={install}
+                  className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white"
+                >
+                  Install
+                </button>
+              ) : (
+                <span className="text-xs text-slate-400">
+                  Available after visit
+                </span>
+              )}
+            </Row>
+
+            <div className="mt-4">
               <button
-                onClick={install}
-                className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white"
+                onClick={resetOnboarding}
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
-                Install
+                Replay Onboarding
               </button>
-            ) : (
-              <span className="text-xs text-slate-400">Available after visit</span>
-            )}
-          </Row>
-        </Section>
+            </div>
+          </Section>
 
         <Section title="Preferences">
           <Row

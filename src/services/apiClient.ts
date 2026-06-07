@@ -295,6 +295,24 @@ export async function apiTrackEvent(
   });
 }
 
+export async function apiAdminAnalytics() {
+  return request("/api/admin/analytics", {
+    headers: {
+      "x-admin-secret": import.meta.env.VITE_ADMIN_SECRET ?? "",
+    },
+  });
+}
+
+export async function apiRecoverySuggestion() {
+  return request("/api/recovery/suggestion");
+}
+
+export async function apiAutoRescheduleMissedWork() {
+  return request("/api/recovery/reschedule", {
+    method: "POST",
+  });
+}
+
 export async function authFetch(path: string, options?: RequestInit) {
   return request(path, options);
 }

@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Award, Clock, Share2, Target, Zap } from "lucide-react";
-import { apiWeeklyInsights } from "../services/apiClient";
+import {
+  apiAutoRescheduleMissedWork,
+  apiRecoverySuggestion,
+  apiWeeklyInsights,
+} from "../services/apiClient";
 
 type WeeklyInsights = {
   weekStart: string;
@@ -36,16 +40,29 @@ export function Insights() {
   const [insights, setInsights] = useState<WeeklyInsights | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [copyStatus, setCopyStatus] = useState("");
+  const [recovery, setRecovery] = useState<any>(null);
+  const [recoveryMessage, setRecoveryMessage] = useState("");
 
   useEffect(() => {
-    apiWeeklyInsights()
-      .then(setInsights)
-      .catch((error) => {
+    async function load() {
+      try {
+        const weeklyInsights = await apiWeeklyInsights();
+        setInsights(weeklyInsights);
+      } catch (error) {
         console.error("Failed to load weekly insights", error);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
+      }
+
+      try {
+        const suggestion = await apiRecoverySuggestion();
+        setRecovery(suggestion);
+      } catch {
+        setRecovery(null);
+      }
+
+      setIsLoading(false);
+    }
+
+    load();
   }, []);
 
   async function handleShare() {
@@ -58,6 +75,28 @@ export function Insights() {
     } catch {
       setCopyStatus("Copy failed");
       setTimeout(() => setCopyStatus(""), 2000);
+    }
+  }
+
+  async function handleAutoReschedule() {
+    setRecoveryMessage("");
+
+    try {
+      const result = (await apiAutoRescheduleMissedWork()) as {
+            rescheduled?: boolean;
+            reason?: string;
+          };
+
+      if (result.rescheduled) {
+        setRecoveryMessage("Recovery block scheduled.");
+        setRecovery(null);
+      } else {
+        setRecoveryMessage(result.reason ?? "No missed work found.");
+      }
+    } catch (error) {
+      setRecoveryMessage(
+        error instanceof Error ? error.message : "Recovery scheduling failed."
+      );
     }
   }
 
@@ -97,6 +136,48 @@ export function Insights() {
       </header>
 
       <div className="space-y-4 px-4 py-4">
+        {recovery && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-900">
+              Recovery Suggestion
+            </p>
+
+            <p className="mt-2 text-sm text-amber-800">
+              You missed “{recovery.title}”. Best recovery slot:{" "}
+              {new Date(recovery.suggestedStartIso).toLocaleTimeString([], {
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+              .
+            </p>
+
+            <p className="mt-2 text-xs text-amber-700">
+              Burnout risk: {recovery.burnoutRisk}
+            </p>
+
+            {recovery.burnoutSignals?.length > 0 && (
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-amber-700">
+                {recovery.burnoutSignals.map((signal: string) => (
+                  <li key={signal}>{signal}</li>
+                ))}
+              </ul>
+            )}
+
+            <button
+              onClick={handleAutoReschedule}
+              className="mt-3 rounded-xl bg-amber-600 px-4 py-2 text-sm font-medium text-white"
+            >
+              Auto-reschedule
+            </button>
+          </div>
+        )}
+
+        {recoveryMessage && (
+          <p className="rounded-xl bg-slate-900 px-4 py-3 text-sm text-white">
+            {recoveryMessage}
+          </p>
+        )}
+
         <motion.section
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
