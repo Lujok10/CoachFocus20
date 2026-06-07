@@ -98,22 +98,29 @@ function isAllowedOrigin(origin?: string) {
 
 app.use(
   cors({
-    origin(origin, callback) {
-      if (isAllowedOrigin(origin)) {
-        callback(null, true);
-        return;
-      }
-
-      console.error("Blocked by CORS:", origin);
-      callback(new Error(`Blocked by CORS: ${origin}`));
-    },
+    origin: [
+      "http://localhost:5173",
+      "https://coach-focus20.vercel.app",
+    ],
     credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "x-admin-secret",
+      "x-cron-secret",
+    ],
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+    ],
   })
 );
 
-app.use(express.json());
+app.options("*", cors());
 
 app.use(
   clerkMiddleware({
