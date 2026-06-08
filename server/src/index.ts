@@ -120,7 +120,7 @@ app.use(
   })
 );
 
-app.options("*", cors());
+app.options("/{*splat}", cors());
 
 app.use(
   clerkMiddleware({
