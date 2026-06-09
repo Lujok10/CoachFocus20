@@ -492,6 +492,8 @@ app.post("/api/focus/start", async (req, res, next) => {
 app.post("/api/tasks", async (req, res, next) => {
   try {
     const userId = getRequestUserId(req);
+       console.log("CREATE TASK BODY:", req.body);
+
 
     res.json(
       await createTask(userId, req.body ?? {})
