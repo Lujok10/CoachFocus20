@@ -10,7 +10,7 @@ import { getRequestUserId } from "./auth";
 import multer from "multer";
 import fs from "fs";
 import { transcribeAndAnalyzeAudio } from "./voice";
-
+import { getAuth } from "@clerk/express";
 
 import {
   applyFlexShift,
@@ -435,11 +435,21 @@ app.get("/api/auth/google", (req, res, next) => {
 app.get("/api/google/callback", async (req, res, next) => {
   try {
     const code = String(req.query.code ?? "");
-    const userId = String(req.query.state ?? "");
+    const state = String(req.query.state ?? "");
 
     if (!code) {
       res.status(400).send("Missing Google OAuth code.");
       return;
+    }
+
+    let userId = state;
+
+    if (!userId) {
+      const auth = getAuth(req);
+
+      if (auth.userId) {
+        userId = auth.userId;
+      }
     }
 
     if (!userId) {
@@ -449,7 +459,9 @@ app.get("/api/google/callback", async (req, res, next) => {
 
     await handleGoogleCallback(code, userId);
 
-    res.redirect(`${CLIENT_URL}?calendar=connected`);
+    res.redirect(
+      `${process.env.FRONTEND_URL ?? "https://coach-focus20.vercel.app"}/settings?google=connected`
+    );
   } catch (error) {
     next(error);
   }
