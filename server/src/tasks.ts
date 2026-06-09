@@ -41,16 +41,18 @@ export async function createTask(
 ) {
   await ensureUser(userId);
 
-  if (!input.title?.trim()) {
-    throw new Error("Task title is required.");
-  }
+ const title = String(input.title ?? "").trim();
 
+if (!title) {
+  throw new Error("Task title is required.");
+}
   return prisma.task.create({
-    data: {
+   data: {
       userId,
-      title: input.title.trim(),
+      title,
       category: input.category ?? "admin",
       notes: input.notes ?? null,
+
       dueDateIso: input.dueDateIso ? new Date(input.dueDateIso) : null,
       startIso: input.startIso ? new Date(input.startIso) : null,
       endIso: input.endIso ? new Date(input.endIso) : null,
