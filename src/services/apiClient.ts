@@ -208,8 +208,11 @@ export async function apiCreateTask(input: {
   notes?: string;
   startIso?: string;
   endIso?: string;
+  durationMinutes?: number;
   protectAsFocus?: boolean;
-}) {
+})
+
+{
   return request<{ id: string }>("/api/tasks", {
     method: "POST",
     body: JSON.stringify(input),
