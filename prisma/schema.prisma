@@ -60,49 +60,48 @@ enum LeverCategory {
   creative
 }
 
-
 model User {
-  id                 String              @id @default(cuid())
-  email              String?             @unique
-  name               String?
+  id    String  @id @default(cuid())
+  email String? @unique
+  name  String?
 
-  timezone           String              @default("America/New_York")
-  provider           Provider            @default(local)
-  calendarConnected  Boolean             @default(false)
-  calendarPermission CalendarPermission  @default(none)
-  protectEnabled     Boolean             @default(true)
-  flexShiftEnabled   Boolean             @default(false)
-  maxMovesPerDay     Int                 @default(1)
-  notificationsEnabled Boolean            @default(false)
-  completedFirstLever Boolean             @default(false)
-  buffersMinutes     Int                 @default(10)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  tasks              Task[]
-  googleConnection   GoogleCalendarConnection?
-  focusBlocks        FocusBlock[]
-  feedback           Feedback[]
-  actions            ActionsLog[]
-  analytics          AnalyticsEvent[]
-  calendarWriteQueue CalendarWriteQueue[]
-  pushSubscriptions  PushSubscription[]
-  notificationJobs   NotificationJob[]
+  timezone               String                    @default("America/New_York")
+  provider               Provider                  @default(local)
+  calendarConnected      Boolean                   @default(false)
+  calendarPermission     CalendarPermission        @default(none)
+  protectEnabled         Boolean                   @default(true)
+  flexShiftEnabled       Boolean                   @default(false)
+  maxMovesPerDay         Int                       @default(1)
+  notificationsEnabled   Boolean                   @default(false)
+  completedFirstLever    Boolean                   @default(false)
+  buffersMinutes         Int                       @default(10)
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+  tasks                  Task[]
+  googleConnection       GoogleCalendarConnection?
+  focusBlocks            FocusBlock[]
+  feedback               Feedback[]
+  actions                ActionsLog[]
+  analytics              AnalyticsEvent[]
+  calendarWriteQueue     CalendarWriteQueue[]
+  calendarWriteJobs      CalendarWriteJob[]
+  pushSubscriptions      PushSubscription[]
+  notificationJobs       NotificationJob[]
   notificationPreference NotificationPreference?
-  patternProfile     PatternProfile?
-
+  patternProfile         PatternProfile?
 }
 
 model GoogleCalendarConnection {
-  id             String   @id @default(cuid())
-  userId         String   @unique
-  googleEmail    String?
-  accessToken    String   @db.Text
-  refreshToken   String?  @db.Text
-  scope          String?  @db.Text
-  expiryDate     BigInt?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  googleEmail  String?
+  accessToken  String   @db.Text
+  refreshToken String?  @db.Text
+  scope        String?  @db.Text
+  expiryDate   BigInt?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model FocusBlock {
@@ -121,8 +120,8 @@ model FocusBlock {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  feedback        Feedback[]
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feedback Feedback[]
 
   @@index([userId, startIso])
 }
@@ -131,7 +130,7 @@ model PushSubscription {
   id        String   @id @default(cuid())
   userId    String
   endpoint  String   @unique
-  p256dh     String
+  p256dh    String
   auth      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -176,19 +175,17 @@ model NotificationJob {
   @@index([userId, scheduledFor])
 }
 
-
-
 model Feedback {
-  id           String     @id @default(cuid())
+  id           String   @id @default(cuid())
   userId       String
   focusBlockId String
   result       String
   needleMover  String
   noteText     String?
-  createdAt    DateTime   @default(now())
+  createdAt    DateTime @default(now())
 
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  focusBlock   FocusBlock @relation(fields: [focusBlockId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  focusBlock FocusBlock @relation(fields: [focusBlockId], references: [id], onDelete: Cascade)
 }
 
 model ActionsLog {
@@ -201,7 +198,7 @@ model ActionsLog {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model PatternProfile {
@@ -213,7 +210,7 @@ model PatternProfile {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model AnalyticsEvent {
@@ -223,38 +220,55 @@ model AnalyticsEvent {
   payload   Json?
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Task {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   userId          String
   title           String
-  category        String   @default("admin")
+  category        String    @default("admin")
   notes           String?
   dueDateIso      DateTime?
   startIso        DateTime?
   endIso          DateTime?
-  provider        String   @default("local")
+  provider        String    @default("local")
   providerEventId String?
-  status          String   @default("unscheduled")
-  protectAsFocus  Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  status          String    @default("unscheduled")
+  protectAsFocus  Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model CalendarWriteQueue {
-  id          String   @id @default(cuid())
-  userId      String
-  actionType  String
-  payload     Json
-  status      String   @default("queued")
-  attempts    Int      @default(0)
-  lastError   String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  userId     String
+  actionType String
+  payload    Json
+  status     String   @default("queued")
+  attempts   Int      @default(0)
+  lastError  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CalendarWriteJob {
+  id        String   @id @default(cuid())
+  userId    String
+  operation String
+  status    String   @default("pending")
+  retries   Int      @default(0)
+  lastError String?
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([userId, status])
 }

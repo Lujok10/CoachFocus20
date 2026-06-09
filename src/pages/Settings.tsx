@@ -16,6 +16,7 @@ import {
   apiClearUserHistory,
   apiDisconnectGoogle,
   apiGetUserRules,
+  apiGoogleStatus,
   apiResetPatternProfile,
   apiSaveUserRules,
   getGoogleConnectUrl,
@@ -142,7 +143,7 @@ export function Settings() {
   const [googleConnectUrl, setGoogleConnectUrl] = useState("");
   const [isWorking, setIsWorking] = useState(false);
   const [message, setMessage] = useState("");
-
+  const [googleStatus, setGoogleStatus] = useState<any>(null);
   const { canInstall, install } = usePwaInstall();
 
   const loadSettings = async () => {
@@ -161,6 +162,10 @@ export function Settings() {
     } catch {
       setGoogleConnectUrl("");
     }
+
+    apiGoogleStatus()
+  .then(setGoogleStatus)
+  .catch(() => setGoogleStatus(null));
   };
 
   useEffect(() => {
@@ -287,6 +292,21 @@ export function Settings() {
                 : "Not connected"
             }
           >
+          {googleStatus?.reconnectRequired && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  <p className="font-medium">Google Calendar reconnect required</p>
+                  <p className="mt-1 text-xs">
+                    Missing scopes: {googleStatus.missingScopes?.join(", ") || "refresh token"}
+                  </p>
+
+                  <a
+                    href={googleStatus.authUrl}
+                    className="mt-3 inline-flex rounded-lg bg-amber-600 px-3 py-2 text-xs font-medium text-white"
+                  >
+                    Reconnect Google
+                  </a>
+                </div>
+              )}
             <select
               value={rules.provider}
               onChange={(e) =>

@@ -1,4 +1,4 @@
-import { CalendarEvent, UserRules, WakePlan } from "../types";
+import { UserRules, WakePlan } from "../types";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8787";
@@ -8,8 +8,6 @@ let clerkTokenProvider: (() => Promise<string | null>) | null = null;
 export function setClerkTokenProvider(provider: () => Promise<string | null>) {
   clerkTokenProvider = provider;
 }
-
-
 
 export async function request<T>(
   path: string,
@@ -25,10 +23,10 @@ export async function request<T>(
     console.error("TOKEN ERROR:", error);
   }
 
-  console.log("JWT TOKEN VALUE:", token);
+  const isFormData = options.body instanceof FormData;
 
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
   };
 
   if (token) {
@@ -39,7 +37,7 @@ export async function request<T>(
     ...options,
     headers: {
       ...headers,
-      ...(options.headers || {}),
+      ...(options.headers as Record<string, string> | undefined),
     },
   });
 
@@ -48,7 +46,7 @@ export async function request<T>(
 
     try {
       const body = await res.json();
-      message = body.error || message;
+      message = body.error || body.message || message;
     } catch {
       // Ignore non-JSON errors
     }
@@ -56,7 +54,18 @@ export async function request<T>(
     throw new Error(message);
   }
 
+  if (res.status === 204) {
+    return undefined as T;
+  }
+
   return res.json() as Promise<T>;
+}
+
+export async function authFetch<T = unknown>(
+  path: string,
+  options?: RequestInit
+) {
+  return request<T>(path, options ?? {});
 }
 
 export async function apiHealth() {
@@ -120,9 +129,11 @@ export async function apiVoiceCheckinRecord(input: {
 }
 
 export async function apiCanSendNotification() {
-  return request<{ allowed: boolean; reason?: string; sentToday?: number }>(
-    "/api/notifications/can-send"
-  );
+  return request<{
+    allowed: boolean;
+    reason?: string;
+    sentToday?: number;
+  }>("/api/notifications/can-send");
 }
 
 export async function apiLogNotificationSent(input: {
@@ -139,25 +150,27 @@ export async function apiLogNotificationSent(input: {
 }
 
 export async function apiCalendarEvents(startIso: string, endIso: string) {
-  const params = new URLSearchParams({
-    startIso,
-    endIso,
-  });
-
-  const events = await request<
-    Array<
-      Omit<CalendarEvent, "start" | "end"> & {
-        start: string;
-        end: string;
-      }
-    >
-  >(`/api/calendar/events?${params}`);
-
-  return events.map((event) => ({
-    ...event,
-    start: new Date(event.start),
-    end: new Date(event.end),
-  })) as CalendarEvent[];
+  return request<
+    Array<{
+      id: string;
+      title?: string;
+      summary?: string;
+      start?: string | Date;
+      end?: string | Date;
+      startIso?: string | Date;
+      endIso?: string | Date;
+      type?: "focus" | "task" | "calendar";
+      isFocusBlock?: boolean;
+      protectAsFocus?: boolean;
+      providerEventId?: string | null;
+      category?: string;
+      leverCategory?: string;
+    }>
+  >(
+    `/api/calendar/events?startIso=${encodeURIComponent(
+      startIso
+    )}&endIso=${encodeURIComponent(endIso)}`
+  );
 }
 
 export async function apiWeeklyInsights() {
@@ -180,6 +193,11 @@ export async function apiWeeklyInsights() {
       startIso: string;
       reason: string;
     }>;
+    trend?: Array<{
+      day: string;
+      protectedMinutes: number;
+      completedMinutes: number;
+    }>;
     shareText: string;
   }>("/api/insights/weekly");
 }
@@ -192,7 +210,7 @@ export async function apiCreateTask(input: {
   endIso?: string;
   protectAsFocus?: boolean;
 }) {
-  return request<any>("/api/tasks", {
+  return request<{ id: string }>("/api/tasks", {
     method: "POST",
     body: JSON.stringify(input),
   });
@@ -282,14 +300,15 @@ export async function apiClearUserHistory() {
     }
   );
 }
+
 export async function apiTrackEvent(
-  eventType: string,
+  name: string,
   payload?: Record<string, unknown>
 ) {
   return request("/api/analytics/track", {
     method: "POST",
     body: JSON.stringify({
-      eventType,
+      name,
       payload,
     }),
   });
@@ -312,7 +331,14 @@ export async function apiAutoRescheduleMissedWork() {
     method: "POST",
   });
 }
-
-export async function authFetch(path: string, options?: RequestInit) {
-  return request(path, options);
+export async function apiGoogleStatus() {
+  return request<{
+    connected: boolean;
+    hasRefreshToken: boolean;
+    permission: "write" | "limited" | "none";
+    missingScopes: string[];
+    reconnectRequired: boolean;
+    authUrl: string;
+    updatedAt: string | null;
+  }>("/api/google/status");
 }

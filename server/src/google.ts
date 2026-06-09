@@ -1,10 +1,10 @@
 import { google } from "googleapis";
 import { prisma, ensureUser } from "./db";
 
-const GOOGLE_SCOPES = [
+export const GOOGLE_CALENDAR_SCOPES = [
   "openid",
-  "https://www.googleapis.com/auth/userinfo.email",
-  "https://www.googleapis.com/auth/userinfo.profile",
+  "email",
+  "profile",
   "https://www.googleapis.com/auth/calendar",
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar.freebusy",
@@ -17,7 +17,17 @@ function getRedirectUri() {
   );
 }
 
-function getOAuthClient() {
+function normalizeExpiryDate(
+  value: number | bigint | Date | null | undefined
+) {
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+
+  return value ?? null;
+}
+
+export function getOAuthClient() {
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
@@ -25,18 +35,53 @@ function getOAuthClient() {
   );
 }
 
-export function getGoogleAuthUrl(userId: string) {
+export function getGoogleAuthUrl(userId?: string) {
   const oauth2Client = getOAuthClient();
-
-  console.log("GOOGLE_SCOPES USED:", GOOGLE_SCOPES);
 
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
-    include_granted_scopes: false,
-    scope: GOOGLE_SCOPES,
+    scope: GOOGLE_CALENDAR_SCOPES,
     state: userId,
   });
+}
+
+export async function getAuthorizedGoogleClient(userId: string) {
+  const connection = await prisma.googleCalendarConnection.findUnique({
+    where: { userId },
+  });
+
+  if (!connection?.refreshToken) {
+    throw new Error("Google Calendar reconnect required.");
+  }
+
+  const client = getOAuthClient();
+
+  client.setCredentials({
+    access_token: connection.accessToken || undefined,
+    refresh_token: connection.refreshToken,
+    expiry_date:
+      typeof connection.expiryDate === "bigint"
+        ? Number(connection.expiryDate)
+        : connection.expiryDate ?? undefined,
+  });
+
+  client.on("tokens", async (tokens) => {
+    await prisma.googleCalendarConnection.update({
+      where: { userId },
+      data: {
+        accessToken: tokens.access_token ?? connection.accessToken,
+        refreshToken: tokens.refresh_token ?? connection.refreshToken,
+        expiryDate: normalizeExpiryDate(
+          tokens.expiry_date ?? connection.expiryDate ?? null
+        ),
+        scope: tokens.scope ?? connection.scope,
+        updatedAt: new Date(),
+      },
+    });
+  });
+
+  return client;
 }
 
 export async function handleGoogleCallback(code: string, userId: string) {
@@ -54,22 +99,26 @@ export async function handleGoogleCallback(code: string, userId: string) {
 
   const profile = await oauth2.userinfo.get();
 
+  const existing = await prisma.googleCalendarConnection.findUnique({
+    where: { userId },
+  });
+
   await prisma.googleCalendarConnection.upsert({
-    where: {
-      userId,
-    },
+    where: { userId },
     update: {
-      accessToken: tokens.access_token ?? undefined,
-      refreshToken: tokens.refresh_token ?? undefined,
-      scope: tokens.scope ?? GOOGLE_SCOPES.join(" "),
-      expiryDate: tokens.expiry_date ?? undefined,
+      googleEmail: profile.data.email ?? existing?.googleEmail ?? null,
+      accessToken: tokens.access_token ?? existing?.accessToken ?? "",
+      refreshToken: tokens.refresh_token ?? existing?.refreshToken ?? "",
+      scope: tokens.scope ?? existing?.scope ?? GOOGLE_CALENDAR_SCOPES.join(" "),
+      expiryDate: tokens.expiry_date ?? existing?.expiryDate ?? null,
+      updatedAt: new Date(),
     },
     create: {
       userId,
       googleEmail: profile.data.email ?? null,
       accessToken: tokens.access_token ?? "",
       refreshToken: tokens.refresh_token ?? "",
-      scope: tokens.scope ?? GOOGLE_SCOPES.join(" "),
+      scope: tokens.scope ?? GOOGLE_CALENDAR_SCOPES.join(" "),
       expiryDate: tokens.expiry_date ?? null,
     },
   });
@@ -91,33 +140,11 @@ export async function handleGoogleCallback(code: string, userId: string) {
 }
 
 async function getAuthedCalendarClient(userId: string) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: {
-      googleConnection: true,
-    },
-  });
-
-  const connection = user?.googleConnection;
-
-  if (!connection?.accessToken && !connection?.refreshToken) {
-    throw new Error("Google Calendar is not connected.");
-  }
-
-  const oauth2Client = getOAuthClient();
-
-  oauth2Client.setCredentials({
-    access_token: connection.accessToken ?? undefined,
-    refresh_token: connection.refreshToken ?? undefined,
-    expiry_date:
-      typeof connection.expiryDate === "bigint"
-        ? Number(connection.expiryDate)
-        : connection.expiryDate ?? undefined,
-  });
+  const auth = await getAuthorizedGoogleClient(userId);
 
   return google.calendar({
     version: "v3",
-    auth: oauth2Client,
+    auth,
   });
 }
 
@@ -146,7 +173,7 @@ export async function googleFreeBusy(
 
 export async function googleCreateOrUpdateFocusEvent(input: {
   userId: string;
-  existingEventId?: string;
+  existingEventId?: string | null;
   title: string;
   startIso: string;
   endIso: string;
@@ -193,15 +220,56 @@ export async function googleCreateOrUpdateFocusEvent(input: {
   return response.data.id;
 }
 
-export async function googleDeleteEvent(userId: string, eventId: string) {
+export async function createGoogleCalendarEvent(
+  userId: string,
+  input: {
+    summary: string;
+    description?: string;
+    startIso: string;
+    endIso: string;
+    transparency?: "opaque" | "transparent";
+  }
+) {
+  const calendar = await getAuthedCalendarClient(userId);
+
+  const response = await calendar.events.insert({
+    calendarId: "primary",
+    requestBody: {
+      summary: input.summary,
+      description: input.description,
+      start: {
+        dateTime: input.startIso,
+      },
+      end: {
+        dateTime: input.endIso,
+      },
+      transparency: input.transparency ?? "opaque",
+    },
+  });
+
+  if (!response.data.id) {
+    throw new Error("Google Calendar event was created without an event ID.");
+  }
+
+  return response.data.id;
+}
+
+export async function deleteGoogleCalendarEvent(
+  userId: string,
+  providerEventId: string
+) {
   const calendar = await getAuthedCalendarClient(userId);
 
   await calendar.events.delete({
     calendarId: "primary",
-    eventId,
+    eventId: providerEventId,
   });
 
   return { ok: true };
+}
+
+export async function googleDeleteEvent(userId: string, eventId: string) {
+  return deleteGoogleCalendarEvent(userId, eventId);
 }
 
 export async function googleMoveEvent(input: {

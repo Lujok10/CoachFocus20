@@ -28,6 +28,7 @@ import {
 } from "./coach";
 
 import { getGoogleAuthUrl, handleGoogleCallback } from "./google";
+import { processCalendarWriteQueue } from "./calendarWriteQueue";
 import { getWeeklyInsights } from "./insights";
 import { retryCalendarWrites } from "./retryQueue";
 import { getAdminAnalytics } from "./adminAnalytics";
@@ -198,6 +199,64 @@ async function getHealthStatus() {
 app.get("/api/admin/analytics", async (_req, res, next) => {
   try {
     res.json(await getAdminAnalytics());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/cron/calendar-write-queue", async (req, res, next) => {
+  try {
+    const secret = req.headers["x-cron-secret"];
+
+    if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
+      res.status(401).json({
+        ok: false,
+        error: "Unauthorized cron.",
+      });
+      return;
+    }
+
+    res.json(await processCalendarWriteQueue());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/google/status", async (req, res, next) => {
+  try {
+    const userId = getRequestUserId(req);
+
+    const connection = await prisma.googleCalendarConnection.findUnique({
+      where: { userId },
+    });
+
+    const requiredScopes = [
+      "https://www.googleapis.com/auth/calendar",
+      "https://www.googleapis.com/auth/calendar.events",
+      "https://www.googleapis.com/auth/calendar.freebusy",
+    ];
+
+    const currentScopes = String(connection?.scope ?? "");
+
+    const missingScopes = requiredScopes.filter(
+      (scope) => !currentScopes.includes(scope)
+    );
+
+    res.json({
+      connected: Boolean(connection?.refreshToken),
+      hasRefreshToken: Boolean(connection?.refreshToken),
+      permission:
+        missingScopes.length === 0 && connection?.refreshToken
+          ? "write"
+          : connection?.refreshToken
+            ? "limited"
+            : "none",
+      missingScopes,
+      reconnectRequired:
+        !connection?.refreshToken || missingScopes.length > 0,
+      authUrl: getGoogleAuthUrl(),
+      updatedAt: connection?.updatedAt ?? null,
+    });
   } catch (error) {
     next(error);
   }
