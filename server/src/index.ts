@@ -434,30 +434,20 @@ app.get("/api/auth/google", (req, res, next) => {
 
 app.get("/api/google/callback", async (req, res, next) => {
   try {
-    const code = String(req.query.code ?? "");
-    const state = String(req.query.state ?? "");
+    const code = typeof req.query.code === "string" ? req.query.code : "";
+    const state = typeof req.query.state === "string" ? req.query.state : "";
 
     if (!code) {
-      res.status(400).send("Missing Google OAuth code.");
+      res.status(400).send("Missing Google OAuth code. Start connection from Focus20 Settings again.");
       return;
     }
 
-    let userId = state;
-
-    if (!userId) {
-      const auth = getAuth(req);
-
-      if (auth.userId) {
-        userId = auth.userId;
-      }
-    }
-
-    if (!userId) {
-      res.status(400).send("Missing Google OAuth state.");
+    if (!state) {
+      res.status(400).send("Missing Google OAuth state. Start connection from Focus20 Settings again.");
       return;
     }
 
-    await handleGoogleCallback(code, userId);
+    await handleGoogleCallback(code, state);
 
     res.redirect(
       `${process.env.FRONTEND_URL ?? "https://coach-focus20.vercel.app"}/settings?google=connected`
@@ -466,7 +456,6 @@ app.get("/api/google/callback", async (req, res, next) => {
     next(error);
   }
 });
-
 app.get("/api/insights/weekly", async (req, res, next) => {
   try {
     const userId = getRequestUserId(req);
