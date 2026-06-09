@@ -65,6 +65,11 @@ const CLIENT_URL = env.clientUrl;
 
 const app = express();
 
+
+
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true }));
+
 const allowedOrigins = [
   CLIENT_URL,
   process.env.CLIENT_URL,
