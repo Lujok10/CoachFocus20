@@ -23,7 +23,7 @@ async function undoWithBackendFallback(actionId: string) {
   }
 }
 
-export function useWakePlan() {
+export function useWakePlan(enabled = true)  {
   const { isLoaded, isSignedIn } = useAuth();
 
   const [wakePlan, setWakePlan] = useState<WakePlan | null>(null);
@@ -45,6 +45,7 @@ export function useWakePlan() {
   }, [isLoaded, isSignedIn]);
 
   useEffect(() => {
+    if (!enabled) return;
     loadPlan(false);
   }, [loadPlan]);
 

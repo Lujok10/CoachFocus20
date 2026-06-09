@@ -67,13 +67,13 @@ export default function App() {
       .catch(() => setGoogleConnectUrl(""));
   }, [authReady]);
 
-  const {
-    wakePlan,
-    isLoading,
-    undoAction,
-    selectAlternative,
-    updateStatus,
-  } = useWakePlan();
+ const {
+  wakePlan,
+  isLoading,
+  undoAction,
+  selectAlternative,
+  updateStatus,
+} = useWakePlan(authReady);
 
   useEffect(() => {
     if (authReady && wakePlan) {
