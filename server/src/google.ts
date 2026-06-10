@@ -35,7 +35,7 @@ export function getOAuthClient() {
   );
 }
 
-export function getGoogleAuthUrl(userId?: string) {
+export function getGoogleAuthUrl(userId: string) {
   const oauth2Client = getOAuthClient();
 
   return oauth2Client.generateAuthUrl({

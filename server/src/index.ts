@@ -259,7 +259,7 @@ app.get("/api/google/status", async (req, res, next) => {
       missingScopes,
       reconnectRequired:
         !connection?.refreshToken || missingScopes.length > 0,
-      authUrl: getGoogleAuthUrl(),
+      authUrl: getGoogleAuthUrl(userId),
       updatedAt: connection?.updatedAt ?? null,
     });
   } catch (error) {
