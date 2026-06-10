@@ -60,7 +60,8 @@ import {
 
 const env = validateEnv();
 
-const PORT = env.apiPort;
+// const PORT = env.apiPort;
+
 const CLIENT_URL = env.clientUrl;
 
 const app = express();
@@ -781,4 +782,10 @@ app.post("/api/recovery/reschedule", async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+const PORT = Number(process.env.PORT || 8787);
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Focus20 API running on http://0.0.0.0:${PORT}`);
 });
