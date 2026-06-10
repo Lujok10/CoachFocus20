@@ -29,25 +29,33 @@ export function useWakePlan(enabled = true)  {
   const [wakePlan, setWakePlan] = useState<WakePlan | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadPlan = useCallback(async (force = false) => {
-    if (!isLoaded || !isSignedIn) {
-      return;
-    }
-
+  const loadPlan = useCallback(
+  async (force = false) => {
     setIsLoading(true);
 
     try {
-      const plan = await refreshPlanWithBackendFallback(force);
+      const plan = await apiRefreshWakePlan(force);
       setWakePlan(plan);
+    } catch (error) {
+      console.error("WakePlan load failed:", error);
+      setWakePlan(null);
     } finally {
       setIsLoading(false);
     }
-  }, [isLoaded, isSignedIn]);
+  },
+  []
+);
+
+useEffect(() => {
+  if (!enabled) return;
+
+  loadPlan(false);
+}, [enabled, loadPlan]);
 
   useEffect(() => {
-    if (!enabled) return;
-    loadPlan(false);
-  }, [loadPlan]);
+  if (!enabled) return;
+  loadPlan(false);
+}, [enabled, loadPlan]);
 
   const undoAction = useCallback(async () => {
     if (!wakePlan) return;
