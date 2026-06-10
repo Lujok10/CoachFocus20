@@ -207,8 +207,24 @@ export default function App() {
           transition={{ duration: 0.2 }}
           className="min-h-screen pb-24"
         >
-          {activeTab === "calendar" && <Calendar />}
-          {activeTab === "insights" && <Insights />}
+          {activeTab === "calendar" &&
+            (authReady ? (
+              <Calendar />
+            ) : (
+              <div className="flex min-h-screen items-center justify-center">
+                <p className="text-sm text-slate-500">Preparing calendar...</p>
+              </div>
+            ))}
+
+          {activeTab === "insights" &&
+            (authReady ? (
+              <Insights />
+            ) : (
+              <div className="flex min-h-screen items-center justify-center">
+                <p className="text-sm text-slate-500">Preparing insights...</p>
+              </div>
+            ))}
+            
           {activeTab === "settings" && <Settings />}
           {activeTab === "admin-analytics" && <AdminAnalytics />}
         </motion.div>
