@@ -375,25 +375,69 @@ app.post("/api/voice-checkin", async (req, res, next) => {
 });
 
 app.get("/api/calendar/events", async (req, res, next) => {
+  const userId = getRequestUserId(req);
+
+  const startIso =
+    typeof req.query.startIso === "string"
+      ? req.query.startIso
+      : new Date().toISOString();
+
+  const endDate = new Date(startIso);
+  endDate.setDate(endDate.getDate() + 7);
+
+  const endIso =
+    typeof req.query.endIso === "string"
+      ? req.query.endIso
+      : endDate.toISOString();
+
   try {
-    const userId = getRequestUserId(req);
-
-    const startIso =
-      typeof req.query.startIso === "string"
-        ? req.query.startIso
-        : new Date().toISOString();
-
-    const endDate = new Date(startIso);
-    endDate.setDate(endDate.getDate() + 7);
-
-    const endIso =
-      typeof req.query.endIso === "string"
-        ? req.query.endIso
-        : endDate.toISOString();
-
     res.json(await listCalendarEvents(userId, startIso, endIso));
   } catch (error) {
-    next(error);
+    console.error("Calendar events fallback:", error);
+
+    const localTasks = await prisma.task.findMany({
+      where: {
+        userId,
+        startIso: {
+          gte: new Date(startIso),
+        },
+        endIso: {
+          lte: new Date(endIso),
+        },
+      },
+    });
+
+    const localBlocks = await prisma.focusBlock.findMany({
+      where: {
+        userId,
+        startIso: {
+          gte: new Date(startIso),
+        },
+        endIso: {
+          lte: new Date(endIso),
+        },
+      },
+    });
+
+    res.json([
+      ...localTasks.map((task) => ({
+        id: task.id,
+        title: task.title,
+        start: task.startIso,
+        end: task.endIso,
+        type: task.protectAsFocus ? "focus" : "task",
+        protectAsFocus: task.protectAsFocus,
+      })),
+
+      ...localBlocks.map((block) => ({
+        id: block.id,
+        title: block.title,
+        start: block.startIso,
+        end: block.endIso,
+        type: "focus",
+        isFocusBlock: true,
+      })),
+    ]);
   }
 });
 
@@ -456,12 +500,17 @@ app.get("/api/google/callback", async (req, res, next) => {
     next(error);
   }
 });
+
 app.get("/api/insights/weekly", async (req, res, next) => {
   try {
     const userId = getRequestUserId(req);
 
-    res.json(await getWeeklyInsights(userId));
+    const insights = await getWeeklyInsights(userId);
+
+    res.json(insights);
   } catch (error) {
+    console.error("Weekly insights error:", error);
+
     next(error);
   }
 });
