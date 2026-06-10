@@ -410,7 +410,7 @@ app.post("/api/analytics/track", async (req, res, next) => {
   }
 });
 
-app.get("/api/google/auth-url", (req, res, next) => {
+app.get("/api/google/auth-url", async (req, res, next) => {
   try {
     const userId = getRequestUserId(req);
 
