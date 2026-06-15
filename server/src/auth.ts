@@ -1,14 +1,25 @@
 import type { Request } from "express";
-import { getAuth } from "@clerk/express";
+
+type ClerkRequest = Request & {
+  auth?: () => {
+    userId?: string | null;
+    sessionId?: string | null;
+    actor?: unknown;
+  };
+};
 
 export function getRequestUserId(req: Request) {
-  const auth = getAuth(req);
+  const auth = (req as ClerkRequest).auth?.();
 
-  console.log("AUTH OBJECT:", auth);
-
-  if (!auth.userId) {
-    throw new Error("Unauthorized");
+  if (auth?.userId) {
+    return auth.userId;
   }
 
-  return auth.userId;
+  if (process.env.NODE_ENV !== "production") {
+    return "dev-user";
+  }
+
+  const error = new Error("Unauthorized");
+  (error as Error & { statusCode?: number }).statusCode = 401;
+  throw error;
 }

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { enqueueOfflineJob } from "../services/offlineQueue";
 import {
   ChevronLeft,
   ChevronRight,
@@ -16,6 +17,7 @@ import {
   apiPreviewFlexShift,
   apiApplyFlexShift,
 } from "../services/apiClient";
+import { ErrorState } from "../components/ErrorState";
 
 type CalendarView = "day" | "week" | "agenda";
 
@@ -113,6 +115,9 @@ export function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<CalendarView>("week");
   const [events, setEvents] = useState<AppCalendarEvent[]>([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
+  const [reloadIndex, setReloadIndex] = useState(0);
   const [message, setMessage] = useState("");
   const [flexCandidates, setFlexCandidates] = useState<any[]>([]);
   const [flexMessage, setFlexMessage] = useState("");
@@ -126,6 +131,8 @@ export function Calendar() {
   const [protectAsFocus, setProtectAsFocus] = useState(true);
   const [isSavingTask, setIsSavingTask] = useState(false);
   const [taskError, setTaskError] = useState("");
+  const [bestFocusMessage, setBestFocusMessage] = useState("");
+  const [isFindingBestFocus, setIsFindingBestFocus] = useState(false);
 
   const visibleDays = useMemo(() => {
     if (view === "day" || view === "agenda") {
@@ -139,30 +146,47 @@ export function Calendar() {
     });
   }, [currentDate, view]);
 
-  useEffect(() => {
-    async function loadEvents() {
-      const start = new Date(visibleDays[0]);
-      start.setHours(0, 0, 0, 0);
+  const loadEvents = useCallback(async () => {
+    const start = new Date(visibleDays[0]);
+    start.setHours(0, 0, 0, 0);
 
-      const end = new Date(visibleDays[visibleDays.length - 1]);
-      end.setHours(23, 59, 59, 999);
+    const end = new Date(visibleDays[visibleDays.length - 1]);
+    end.setHours(23, 59, 59, 999);
 
-      try {
-        const result = await apiCalendarEvents(
-          start.toISOString(),
-          end.toISOString()
-        );
+    setIsLoadingEvents(true);
+    setCalendarError(null);
 
-        setEvents(Array.isArray(result) ? result : []);
-        setMessage("");
-      } catch (error) {
-        console.error(error);
-        setMessage("Unable to load calendar events.");
-      }
+    try {
+      const result = await Promise.race([
+        apiCalendarEvents(start.toISOString(), end.toISOString()),
+        new Promise<never>((_, reject) =>
+          window.setTimeout(
+            () => reject(new Error("Calendar is taking longer than expected.")),
+            15_000
+          )
+        ),
+      ]);
+
+      setEvents(Array.isArray(result) ? result : []);
+      setMessage("");
+    } catch (error) {
+      setCalendarError(
+        error instanceof Error
+          ? error.message
+          : "Unable to load calendar events. Please try again."
+      );
+    } finally {
+      setIsLoadingEvents(false);
     }
-
-    loadEvents();
   }, [visibleDays]);
+
+  useEffect(() => {
+    void loadEvents();
+  }, [loadEvents, reloadIndex]);
+
+  function retryCalendar() {
+    setReloadIndex((current) => current + 1);
+  }
 
   function goPrevious() {
     const next = new Date(currentDate);
@@ -174,6 +198,57 @@ export function Calendar() {
     const next = new Date(currentDate);
     next.setDate(currentDate.getDate() + (view === "week" ? 7 : 1));
     setCurrentDate(next);
+  }
+
+  async function handleFindBestFocus() {
+    setIsFindingBestFocus(true);
+    setBestFocusMessage("");
+
+    try {
+      const focusEvents = events.filter(
+        (event) =>
+          eventType(event) === "focus" ||
+          eventType(event) === "task" ||
+          event.protectAsFocus
+      );
+
+      const bestEvent = focusEvents[0] ?? events[0];
+
+      if (!bestEvent) {
+        setBestFocusMessage(
+          "No available focus windows found yet. Add a task or connect your calendar."
+        );
+        return;
+      }
+
+      const startValue = bestEvent.start ?? bestEvent.startIso;
+      const endValue = bestEvent.end ?? bestEvent.endIso;
+
+      if (!startValue || !endValue) {
+        setBestFocusMessage(
+          "I found a possible focus block, but it is missing a valid start or end time."
+        );
+        return;
+      }
+
+      const start = new Date(startValue);
+      const end = new Date(endValue);
+
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+        setBestFocusMessage(
+          "I found a possible focus block, but the time window could not be read."
+        );
+        return;
+      }
+
+      setBestFocusMessage(
+        `Your best 20% window appears to be ${formatTime(start)} - ${formatTime(
+          end
+        )}. Protect this time for your highest-leverage work.`
+      );
+    } finally {
+      setIsFindingBestFocus(false);
+    }
   }
 
   function handleDragStart(event: AppCalendarEvent, dragEvent: React.DragEvent) {
@@ -209,19 +284,36 @@ export function Calendar() {
     );
 
     try {
-      await apiScheduleTask(id, {
-        startIso: start.toISOString(),
-        endIso: end.toISOString(),
-        addToCalendar: Boolean(event.providerEventId),
-        protectAsFocus: eventType(event) === "focus",
-      });
+  await apiScheduleTask(id, {
+    startIso: start.toISOString(),
+    endIso: end.toISOString(),
+    addToCalendar: Boolean(event.providerEventId),
+    protectAsFocus: eventType(event) === "focus",
+  });
 
-      setMessage("Calendar updated.");
-    } catch (error) {
-      console.error(error);
-      setEvents(previous);
-      setMessage("Update failed. Change was reverted.");
-    }
+  setMessage("Calendar updated.");
+} catch (error) {
+  console.error(error);
+
+  enqueueOfflineJob("schedule_task", {
+    taskId: id,
+    input: {
+      startIso: start.toISOString(),
+      endIso: end.toISOString(),
+      addToCalendar: Boolean(event.providerEventId),
+      protectAsFocus: eventType(event) === "focus",
+    },
+  });
+
+  setEvents(previous);
+
+  setMessage(
+    navigator.onLine
+      ? "Update failed. Change was reverted."
+      : "Offline. Change queued for sync."
+  );
+}
+
   }
 
   async function handleDrop(
@@ -437,6 +529,21 @@ async function handleApplyFlexShift(candidate: any) {
         </div>
       )}
 
+      {calendarError && (
+       <ErrorState
+        title="Calendar could not load"
+        message={calendarError}
+        onRetry={retryCalendar}
+
+        />
+      )}
+
+      {isLoadingEvents && !calendarError && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+          Loading calendar events...
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2">
         <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs text-emerald-700">
           Focus block
@@ -450,26 +557,49 @@ async function handleApplyFlexShift(candidate: any) {
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-slate-800">
               AI Calendar Controls
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              Preview FLEX moves before applying.
+              Find and protect your highest-leverage focus windows.
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handlePreviewFlexShift}
-            disabled={isPreviewingFlex}
-            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 disabled:opacity-50"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Preview FLEX
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handlePreviewFlexShift}
+              disabled={isPreviewingFlex || isLoadingEvents}
+              className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 disabled:opacity-50"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Preview FLEX
+            </button>
+
+            <button
+              type="button"
+              onClick={handleFindBestFocus}
+              disabled={isFindingBestFocus || isLoadingEvents}
+              className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {isFindingBestFocus ? "Finding..." : "Find My Best 20%"}
+            </button>
+          </div>
         </div>
+
+        {bestFocusMessage && (
+          <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+            <p className="text-sm font-semibold text-emerald-800">
+              Calendar AI
+            </p>
+
+            <p className="mt-1 text-sm text-emerald-700">
+              {bestFocusMessage}
+            </p>
+          </div>
+        )}
 
         {flexMessage && (
           <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">

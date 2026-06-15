@@ -460,11 +460,14 @@ export async function refreshWakePlan(userId: string, force = false) {
     },
   });
 
-  await trackAnalytics(userId, "wake_sentence_shown", {
-    wakePlanId: `wake_${block.id}`,
-    blockId: block.id,
-  });
-
+ await trackAnalytics(
+  userId,
+  "wake_sentence_shown",
+  {
+    focusBlockId: block.id,
+    source: "cache",
+  }
+);
   await trackAnalytics(userId, "wake_plan_refreshed", {
     force,
     blockId: block.id,

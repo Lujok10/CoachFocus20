@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Award, Clock, Share2, Target, Zap } from "lucide-react";
+import { ErrorState } from "../components/ErrorState";
 import {
   apiAutoRescheduleMissedWork,
   apiRecoverySuggestion,
@@ -42,28 +43,34 @@ export function Insights() {
   const [copyStatus, setCopyStatus] = useState("");
   const [recovery, setRecovery] = useState<any>(null);
   const [recoveryMessage, setRecoveryMessage] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const weeklyInsights = await apiWeeklyInsights();
-        setInsights(weeklyInsights);
-      } catch (error) {
-        console.error("Failed to load weekly insights", error);
-      }
+ async function loadInsights() {
+  setIsLoading(true);
 
-      try {
-        const suggestion = await apiRecoverySuggestion();
-        setRecovery(suggestion);
-      } catch {
-        setRecovery(null);
-      }
+  try {
+    setError(null);
 
-      setIsLoading(false);
-    }
+    const weeklyInsights = await apiWeeklyInsights();
+    setInsights(weeklyInsights);
+  } catch {
+    setError("Insights are temporarily unavailable.");
+    setInsights(null);
+  }
 
-    load();
-  }, []);
+  try {
+    const suggestion = await apiRecoverySuggestion();
+    setRecovery(suggestion);
+  } catch {
+    setRecovery(null);
+  } finally {
+    setIsLoading(false);
+  }
+}
+
+useEffect(() => {
+  loadInsights();
+}, []);
 
   async function handleShare() {
     if (!insights?.shareText) return;
@@ -108,6 +115,16 @@ export function Insights() {
     );
   }
 
+  if (error) {
+    return (
+      <ErrorState
+        title="Unable to load insights"
+        message={error}
+        onRetry={loadInsights}
+      />
+    );
+  }
+
   if (!insights) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 pb-24">
@@ -123,6 +140,17 @@ export function Insights() {
           (insights.summary.completionRate / 100) *
             Math.min(100, insights.summary.needleMoverWins * 25)
         );
+
+  const focusHealthScore = Math.min(
+    100,
+    Math.round(
+      insights.summary.completionRate * 0.6 +
+        insights.summary.needleMoverWins * 10 +
+        (insights.summary.completedMinutes /
+          Math.max(insights.summary.protectedMinutes, 1)) *
+          20
+    )
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
@@ -177,6 +205,42 @@ export function Insights() {
             {recoveryMessage}
           </p>
         )}
+
+        <motion.section
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl border border-slate-200 bg-white p-5"
+              >
+                <div className="mb-4 flex items-center gap-2">
+                  <Target className="h-4 w-4 text-emerald-600" />
+
+                  <h2 className="text-sm font-semibold text-slate-800">
+                    Focus Health Score
+                  </h2>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-4xl font-bold text-slate-900">
+                      {focusHealthScore}/100
+                    </p>
+
+                    <p className="mt-1 text-sm text-slate-500">
+                      Overall focus performance
+                    </p>
+                  </div>
+
+                  <div className="text-right">
+                    <p className="text-sm text-slate-500">
+                      Completion: {insights.summary.completionRate}%
+                    </p>
+
+                    <p className="text-sm text-slate-500">
+                      Wins: {insights.summary.needleMoverWins}
+                    </p>
+                  </div>
+                </div>
+              </motion.section>
 
         <motion.section
           initial={{ opacity: 0, y: 10 }}
@@ -310,7 +374,7 @@ export function Insights() {
           </motion.section>
         )}
 
-        <motion.section
+       <motion.section
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
@@ -321,6 +385,20 @@ export function Insights() {
             <h2 className="text-sm font-semibold text-slate-800">
               Weekly Summary
             </h2>
+          </div>
+
+          <div className="mb-4 rounded-xl bg-emerald-50 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+              AI Coach Summary
+            </p>
+
+            <p className="mt-1 text-sm text-emerald-800">
+              {focusHealthScore >= 80
+                ? "Excellent week. Continue protecting high-impact focus blocks."
+                : focusHealthScore >= 60
+                  ? "Good momentum. Increase completion consistency."
+                  : "Focus system needs attention. Prioritize fewer but higher-impact blocks."}
+            </p>
           </div>
 
           <p className="text-sm leading-6 text-slate-600">

@@ -47,6 +47,20 @@ export interface WakePlan {
   reservationStatus: "reserved" | "suggested" | "queued" | "cancelled";
   calendarReconnectRequired: boolean;
   readOnlyCalendar: boolean;
+
+  impact?: number;
+  effortMinutes?: number;
+  paretoScore?: number;
+  recommendationReason?: string;
+  recommendedStart?: string;
+  recommendedEnd?: string;
+  leverName?: string;
+
+  nextAction?: {
+    title: string;
+    durationMinutes: number;
+    reason: string;
+  };
 }
 
 export interface Lever {

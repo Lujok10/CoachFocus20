@@ -19,8 +19,8 @@ export async function request<T>(
     if (clerkTokenProvider) {
       token = await clerkTokenProvider();
     }
-  } catch (error) {
-    console.error("TOKEN ERROR:", error);
+  } catch {
+    token = null;
   }
 
   const isFormData = options.body instanceof FormData;
@@ -31,6 +31,7 @@ export async function request<T>(
 
   if (token) {
     headers.Authorization = `Bearer ${token}`;
+    
   }
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -318,11 +319,7 @@ export async function apiTrackEvent(
 }
 
 export async function apiAdminAnalytics() {
-  return request("/api/admin/analytics", {
-    headers: {
-      "x-admin-secret": import.meta.env.VITE_ADMIN_SECRET ?? "",
-    },
-  });
+  return request("/api/admin/analytics");
 }
 
 export async function apiRecoverySuggestion() {

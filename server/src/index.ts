@@ -3,14 +3,23 @@ import "dotenv/config";
 import cors from "cors";
 import express from "express";
 import { clerkMiddleware } from "@clerk/express";
+import multer from "multer";
+import fs from "fs";
 
 import { prisma, ensureDemoUser, ensureUser } from "./db";
 import { validateEnv } from "./env";
 import { getRequestUserId } from "./auth";
-import multer from "multer";
-import fs from "fs";
+import { requireAdmin, rateLimit } from "./security";
+import {
+  booleanField,
+  enumField,
+  isoDateField,
+  optional,
+  stringField,
+  validateBody,
+  validateQuery,
+} from "./validation";
 import { transcribeAndAnalyzeAudio } from "./voice";
-import { getAuth } from "@clerk/express";
 
 import {
   applyFlexShift,
@@ -59,17 +68,14 @@ import {
 } from "./recovery";
 
 const env = validateEnv();
-
-// const PORT = env.apiPort;
-
+const PORT = Number(process.env.PORT || env.apiPort || 8787);
 const CLIENT_URL = env.clientUrl;
 
 const app = express();
 
-
-
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true }));
+app.set("trust proxy", 1);
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
 const allowedOrigins = [
   CLIENT_URL,
@@ -82,21 +88,12 @@ const allowedOrigins = [
   "http://localhost:5175",
 ].filter(Boolean) as string[];
 
-const upload = multer({
-  dest: "uploads/",
-  limits: {
-    fileSize: 10 * 1024 * 1024,
-  },
-});
-
 function isAllowedOrigin(origin?: string) {
   if (!origin) return true;
-
   if (allowedOrigins.includes(origin)) return true;
 
   try {
     const url = new URL(origin);
-
     return url.protocol === "https:" && url.hostname.endsWith(".vercel.app");
   } catch {
     return false;
@@ -105,81 +102,65 @@ function isAllowedOrigin(origin?: string) {
 
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "https://coach-focus20.vercel.app",
-    ],
+    origin(origin, callback) {
+      if (isAllowedOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error("Origin is not allowed by CORS."));
+    },
     credentials: true,
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "x-admin-secret",
-      "x-cron-secret",
-    ],
-    methods: [
-      "GET",
-      "POST",
-      "PUT",
-      "PATCH",
-      "DELETE",
-      "OPTIONS",
-    ],
+    allowedHeaders: ["Content-Type", "Authorization", "x-cron-secret"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   })
 );
 
 app.options("/{*splat}", cors());
 
+// app.use(
+//   clerkMiddleware({
+//     secretKey: process.env.CLERK_SECRET_KEY,
+//     publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+//     audience: "focus20-api",
+//   })
+// );
 app.use(
   clerkMiddleware({
-    secretKey: process.env.CLERK_SECRET_KEY,
-    publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
     audience: "focus20-api",
   })
 );
-app.post(
-  "/api/voice/checkin",
-  upload.single("audio"),
-  async (req, res, next) => {
-    try {
-      const focusBlockId = String(req.body?.focusBlockId ?? "");
 
-      if (!focusBlockId) {
-        res.status(400).json({
-          ok: false,
-          error: "Missing focusBlockId.",
-        });
-        return;
-      }
-
-      if (!req.file?.path) {
-        res.status(400).json({
-          ok: false,
-          error: "Missing audio file.",
-        });
-        return;
-      }
-
-      const analysis = await transcribeAndAnalyzeAudio(req.file.path);
-
-      const checkin = await recordCheckin({
-        focusBlockId,
-        result: analysis.suggestedResult,
-        needleMover: analysis.suggestedNeedleMover,
-        noteText: `[Voice] ${analysis.transcript}\n\nMood: ${analysis.mood}\nContext: ${analysis.context}`,
-      });
-
-      fs.unlink(req.file.path, () => {});
-
-      res.json({
-        ok: true,
-        analysis,
-        checkin,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
+app.use(
+  "/api",
+  rateLimit({ windowMs: 60_000, max: 120, keyPrefix: "api" })
 );
+
+const strictWriteLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 30,
+  keyPrefix: "write",
+});
+
+const voiceLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 6,
+  keyPrefix: "voice",
+});
+
+const upload = multer({
+  dest: "uploads/",
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+    files: 1,
+  },
+  fileFilter: (_req, file, callback) => {
+    if (!file.mimetype.startsWith("audio/")) {
+      callback(new Error("Only audio files are allowed."));
+      return;
+    }
+    callback(null, true);
+  },
+});
 
 async function getHealthStatus() {
   try {
@@ -191,18 +172,46 @@ async function getHealthStatus() {
       database: "connected",
       time: new Date().toISOString(),
     };
-  } catch (error) {
+  } catch {
     return {
       ok: false,
       service: "focus20-api",
       database: "disconnected",
-      error: error instanceof Error ? error.message : "Database check failed",
       time: new Date().toISOString(),
     };
   }
 }
 
-app.get("/api/admin/analytics", async (_req, res, next) => {
+function requireCron(req: express.Request, res: express.Response) {
+  const secret = req.headers["x-cron-secret"];
+
+  if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
+    res.status(401).json({ ok: false, error: "Unauthorized cron." });
+    return false;
+  }
+
+  return true;
+}
+
+const checkinSchema = {
+  focusBlockId: stringField(120),
+  result: optional(enumField(["crushed", "meh", "missed"])),
+  needleMover: optional(enumField(["yes", "somewhat", "no", "unconfirmed"])),
+  noteText: optional(stringField(5_000)),
+  note: optional(stringField(5_000)),
+};
+
+app.get("/health", async (_req, res) => {
+  const health = await getHealthStatus();
+  res.status(health.ok ? 200 : 503).json(health);
+});
+
+app.get("/api/health", async (_req, res) => {
+  const health = await getHealthStatus();
+  res.status(health.ok ? 200 : 503).json(health);
+});
+
+app.get("/api/admin/analytics", requireAdmin, async (_req, res, next) => {
   try {
     res.json(await getAdminAnalytics());
   } catch (error) {
@@ -212,16 +221,7 @@ app.get("/api/admin/analytics", async (_req, res, next) => {
 
 app.post("/api/cron/calendar-write-queue", async (req, res, next) => {
   try {
-    const secret = req.headers["x-cron-secret"];
-
-    if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
-      res.status(401).json({
-        ok: false,
-        error: "Unauthorized cron.",
-      });
-      return;
-    }
-
+    if (!requireCron(req, res)) return;
     res.json(await processCalendarWriteQueue());
   } catch (error) {
     next(error);
@@ -243,7 +243,6 @@ app.get("/api/google/status", async (req, res, next) => {
     ];
 
     const currentScopes = String(connection?.scope ?? "");
-
     const missingScopes = requiredScopes.filter(
       (scope) => !currentScopes.includes(scope)
     );
@@ -258,8 +257,7 @@ app.get("/api/google/status", async (req, res, next) => {
             ? "limited"
             : "none",
       missingScopes,
-      reconnectRequired:
-        !connection?.refreshToken || missingScopes.length > 0,
+      reconnectRequired: !connection?.refreshToken || missingScopes.length > 0,
       authUrl: getGoogleAuthUrl(userId),
       updatedAt: connection?.updatedAt ?? null,
     });
@@ -268,200 +266,222 @@ app.get("/api/google/status", async (req, res, next) => {
   }
 });
 
-app.get("/api/admin/analytics", async (req, res, next) => {
-  try {
-    const secret = req.headers["x-admin-secret"];
-
-    if (process.env.ADMIN_SECRET && secret !== process.env.ADMIN_SECRET) {
-      res.status(401).json({ ok: false, error: "Unauthorized." });
-      return;
-    }
-
-    res.json(await getAdminAnalytics());
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/health", async (_req, res) => {
-  const health = await getHealthStatus();
-  res.status(health.ok ? 200 : 503).json(health);
-});
-
-app.get("/api/health", async (_req, res) => {
-  const health = await getHealthStatus();
-  res.status(health.ok ? 200 : 503).json(health);
-});
-
 app.get("/api/rules", async (req, res, next) => {
   try {
     const userId = getRequestUserId(req);
     await ensureUser(userId);
-
     res.json(await getRules(userId));
   } catch (error) {
     next(error);
   }
 });
 
-app.patch("/api/rules", async (req, res, next) => {
-  try {
-    const userId = getRequestUserId(req);
-    await ensureUser(userId);
-
-    res.json(await updateRules(userId, req.body ?? {}));
-  } catch (error) {
-    next(error);
+app.patch(
+  "/api/rules",
+  strictWriteLimiter,
+  validateBody({
+    protectEnabled: optional(booleanField()),
+    flexShiftEnabled: optional(booleanField()),
+    notificationsEnabled: optional(booleanField()),
+  }),
+  async (req, res, next) => {
+    try {
+      const userId = getRequestUserId(req);
+      await ensureUser(userId);
+      res.json(await updateRules(userId, req.body ?? {}));
+    } catch (error) {
+      next(error);
+    }
   }
-});
+);
 
 app.get("/api/wake-plan", async (req, res, next) => {
   try {
     const userId = getRequestUserId(req);
     await ensureUser(userId);
-
     res.json(await refreshWakePlan(userId, false));
   } catch (error) {
     next(error);
   }
 });
 
-app.post("/api/wake-plan/refresh", async (req, res, next) => {
+app.post(
+  "/api/wake-plan/refresh",
+  strictWriteLimiter,
+  validateBody({ forceReserve: optional(booleanField()) }),
+  async (req, res, next) => {
+    try {
+      const userId = getRequestUserId(req);
+      await ensureUser(userId);
+      res.json(await refreshWakePlan(userId, Boolean(req.body?.forceReserve)));
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+app.post("/api/actions/:actionId/undo", strictWriteLimiter, async (req, res, next) => {
   try {
+    res.json(await undoAction(String(req.params.actionId)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post(
+  "/api/checkin",
+  strictWriteLimiter,
+  validateBody(checkinSchema),
+  async (req, res, next) => {
+    try {
+      const feedback = await recordCheckin({
+        focusBlockId: req.body.focusBlockId,
+        result: req.body?.result ?? "meh",
+        needleMover: req.body?.needleMover ?? "unconfirmed",
+        noteText: req.body?.noteText ?? req.body?.note ?? undefined,
+      });
+      res.json({ ok: true, feedback });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+app.post(
+  "/api/voice-checkin",
+  strictWriteLimiter,
+  validateBody(checkinSchema),
+  async (req, res, next) => {
+    try {
+      const feedback = await recordCheckin({
+        focusBlockId: req.body.focusBlockId,
+        result: req.body?.result ?? "meh",
+        needleMover: req.body?.needleMover ?? "unconfirmed",
+        noteText: req.body?.noteText ?? req.body?.note ?? undefined,
+      });
+      res.json({ ok: true, feedback });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+app.post(
+  "/api/voice/checkin",
+  voiceLimiter,
+  upload.single("audio"),
+  async (req, res, next) => {
+    try {
+      const focusBlockId = String(req.body?.focusBlockId ?? "");
+
+      if (!focusBlockId || focusBlockId.length > 120) {
+        res.status(400).json({ ok: false, error: "Missing or invalid focusBlockId." });
+        return;
+      }
+
+      if (!req.file?.path) {
+        res.status(400).json({ ok: false, error: "Missing audio file." });
+        return;
+      }
+
+      const analysis = await transcribeAndAnalyzeAudio(req.file.path);
+
+      const checkin = await recordCheckin({
+        focusBlockId,
+        result: analysis.suggestedResult,
+        needleMover: analysis.suggestedNeedleMover,
+        noteText: `[Voice] ${analysis.transcript}\n\nMood: ${analysis.mood}\nContext: ${analysis.context}`,
+      });
+
+      fs.unlink(req.file.path, () => {});
+      res.json({ ok: true, analysis, checkin });
+    } catch (error) {
+      if (req.file?.path) fs.unlink(req.file.path, () => {});
+      next(error);
+    }
+  }
+);
+
+app.get(
+  "/api/calendar/events",
+  validateQuery({
+    startIso: optional(isoDateField()),
+    endIso: optional(isoDateField()),
+  }),
+  async (req, res, next) => {
     const userId = getRequestUserId(req);
-    await ensureUser(userId);
+    const startIso =
+      typeof req.query.startIso === "string" ? req.query.startIso : new Date().toISOString();
+    const endDate = new Date(startIso);
+    endDate.setDate(endDate.getDate() + 7);
+    const endIso =
+      typeof req.query.endIso === "string" ? req.query.endIso : endDate.toISOString();
 
-    res.json(await refreshWakePlan(userId, Boolean(req.body?.forceReserve)));
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/actions/:actionId/undo", async (req, res, next) => {
-  try {
-    res.json(await undoAction(req.params.actionId));
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/checkin", async (req, res, next) => {
-  try {
-    const feedback = await recordCheckin({
-      focusBlockId: req.body?.focusBlockId,
-      result: req.body?.result ?? "meh",
-      needleMover: req.body?.needleMover ?? "unconfirmed",
-      noteText: req.body?.noteText ?? req.body?.note ?? undefined,
-    });
-
-    res.json({ ok: true, feedback });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/voice-checkin", async (req, res, next) => {
-  try {
-    const feedback = await recordCheckin({
-      focusBlockId: req.body?.focusBlockId,
-      result: req.body?.result ?? "meh",
-      needleMover: req.body?.needleMover ?? "unconfirmed",
-      noteText: req.body?.noteText ?? req.body?.note ?? undefined,
-    });
-
-    res.json({ ok: true, feedback });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/calendar/events", async (req, res, next) => {
-  const userId = getRequestUserId(req);
-
-  const startIso =
-    typeof req.query.startIso === "string"
-      ? req.query.startIso
-      : new Date().toISOString();
-
-  const endDate = new Date(startIso);
-  endDate.setDate(endDate.getDate() + 7);
-
-  const endIso =
-    typeof req.query.endIso === "string"
-      ? req.query.endIso
-      : endDate.toISOString();
-
-  try {
-    res.json(await listCalendarEvents(userId, startIso, endIso));
-  } catch (error) {
-    console.error("Calendar events fallback:", error);
-
-    const localTasks = await prisma.task.findMany({
-      where: {
-        userId,
-        startIso: {
-          gte: new Date(startIso),
+    try {
+      res.json(await listCalendarEvents(userId, startIso, endIso));
+    } catch {
+      const localTasks = await prisma.task.findMany({
+        where: {
+          userId,
+          startIso: { gte: new Date(startIso) },
+          endIso: { lte: new Date(endIso) },
         },
-        endIso: {
-          lte: new Date(endIso),
-        },
-      },
-    });
+      });
 
-    const localBlocks = await prisma.focusBlock.findMany({
-      where: {
-        userId,
-        startIso: {
-          gte: new Date(startIso),
+      const localBlocks = await prisma.focusBlock.findMany({
+        where: {
+          userId,
+          startIso: { gte: new Date(startIso) },
+          endIso: { lte: new Date(endIso) },
         },
-        endIso: {
-          lte: new Date(endIso),
-        },
-      },
-    });
+      });
 
-    res.json([
-      ...localTasks.map((task) => ({
-        id: task.id,
-        title: task.title,
-        start: task.startIso,
-        end: task.endIso,
-        type: task.protectAsFocus ? "focus" : "task",
-        protectAsFocus: task.protectAsFocus,
-      })),
-
-      ...localBlocks.map((block) => ({
-        id: block.id,
-        title: block.title,
-        start: block.startIso,
-        end: block.endIso,
-        type: "focus",
-        isFocusBlock: true,
-      })),
-    ]);
+      res.json([
+        ...localTasks.map((task) => ({
+          id: task.id,
+          title: task.title,
+          start: task.startIso,
+          end: task.endIso,
+          type: task.protectAsFocus ? "focus" : "task",
+          protectAsFocus: task.protectAsFocus,
+        })),
+        ...localBlocks.map((block) => ({
+          id: block.id,
+          title: block.title,
+          start: block.startIso,
+          end: block.endIso,
+          type: "focus",
+          isFocusBlock: true,
+        })),
+      ]);
+    }
   }
-});
+);
 
-app.post("/api/analytics/track", async (req, res, next) => {
-  try {
-    const event = await trackEvent(
-      req.body?.name ?? req.body?.eventName ?? "unknown_event",
-      req.body?.payload ?? {}
-    );
-
-    res.json({ ok: true, event });
-  } catch (error) {
-    next(error);
+app.post(
+  "/api/analytics/track",
+  strictWriteLimiter,
+  validateBody({
+    name: optional(stringField(120)),
+    eventName: optional(stringField(120)),
+  }),
+  async (req, res, next) => {
+    try {
+      const event = await trackEvent(
+        req.body?.name ?? req.body?.eventName ?? "unknown_event",
+        req.body?.payload ?? {}
+      );
+      res.json({ ok: true, event });
+    } catch (error) {
+      next(error);
+    }
   }
-});
+);
 
 app.get("/api/google/auth-url", async (req, res, next) => {
   try {
     const userId = getRequestUserId(req);
-
-    res.json({
-      url: getGoogleAuthUrl(userId),
-    });
+    res.json({ url: getGoogleAuthUrl(userId) });
   } catch (error) {
     next(error);
   }
@@ -470,7 +490,6 @@ app.get("/api/google/auth-url", async (req, res, next) => {
 app.get("/api/auth/google", (req, res, next) => {
   try {
     const userId = getRequestUserId(req);
-
     res.redirect(getGoogleAuthUrl(userId));
   } catch (error) {
     next(error);
@@ -493,10 +512,7 @@ app.get("/api/google/callback", async (req, res, next) => {
     }
 
     await handleGoogleCallback(code, state);
-
-    res.redirect(
-      `${process.env.FRONTEND_URL ?? "https://coach-focus20.vercel.app"}/settings?google=connected`
-    );
+    res.redirect(`${process.env.FRONTEND_URL ?? "https://coach-focus20.vercel.app"}/settings?google=connected`);
   } catch (error) {
     next(error);
   }
@@ -505,13 +521,8 @@ app.get("/api/google/callback", async (req, res, next) => {
 app.get("/api/insights/weekly", async (req, res, next) => {
   try {
     const userId = getRequestUserId(req);
-
-    const insights = await getWeeklyInsights(userId);
-
-    res.json(insights);
+    res.json(await getWeeklyInsights(userId));
   } catch (error) {
-    console.error("Weekly insights error:", error);
-
     next(error);
   }
 });
@@ -524,126 +535,161 @@ app.get("/api/notifications/can-send", async (_req, res, next) => {
   }
 });
 
-app.post("/api/notifications/log-sent", async (req, res, next) => {
-  try {
-    res.json(
-      await logNotificationSent({
-        focusBlockId: req.body?.focusBlockId,
-        type: req.body?.type ?? "pre_block_reminder",
-      })
-    );
-  } catch (error) {
-    next(error);
+app.post(
+  "/api/notifications/log-sent",
+  strictWriteLimiter,
+  validateBody({
+    focusBlockId: optional(stringField(120)),
+    type: optional(enumField(["pre_block_reminder", "end_of_day_checkin"])),
+  }),
+  async (req, res, next) => {
+    try {
+      res.json(
+        await logNotificationSent({
+          focusBlockId: req.body?.focusBlockId,
+          type: req.body?.type ?? "pre_block_reminder",
+        })
+      );
+    } catch (error) {
+      next(error);
+    }
   }
-});
+);
 
-app.post("/api/focus/start", async (req, res, next) => {
-  try {
-    res.json(await startFocusBlock(req.body?.focusBlockId));
-  } catch (error) {
-    next(error);
+app.post(
+  "/api/focus/start",
+  strictWriteLimiter,
+  validateBody({ focusBlockId: optional(stringField(120)) }),
+  async (req, res, next) => {
+    try {
+      res.json(await startFocusBlock(req.body?.focusBlockId));
+    } catch (error) {
+      next(error);
+    }
   }
-});
+);
 
-app.post("/api/tasks", async (req, res, next) => {
-  try {
-    const userId = getRequestUserId(req);
-
-    res.json(
-      await createTask(userId, req.body ?? {})
-    );
-  } catch (error) {
-    next(error);
+app.post(
+  "/api/tasks",
+  strictWriteLimiter,
+  validateBody({
+    title: stringField(200),
+    category: optional(stringField(50)),
+    startIso: optional(isoDateField()),
+    endIso: optional(isoDateField()),
+    protectAsFocus: optional(booleanField()),
+  }),
+  async (req, res, next) => {
+    try {
+      const userId = getRequestUserId(req);
+      res.json(await createTask(userId, req.body ?? {}));
+    } catch (error) {
+      next(error);
+    }
   }
-});
+);
 
 app.get("/api/tasks", async (req, res, next) => {
   try {
     const userId = getRequestUserId(req);
-
     res.json(await listTasks(userId));
   } catch (error) {
     next(error);
   }
 });
 
-app.post("/api/tasks/:taskId/schedule", async (req, res, next) => {
+app.post(
+  "/api/tasks/:taskId/schedule",
+  strictWriteLimiter,
+  validateBody({
+    startIso: isoDateField(),
+    endIso: isoDateField(),
+    addToCalendar: optional(booleanField()),
+    protectAsFocus: optional(booleanField()),
+  }),
+  async (req, res, next) => {
+    try {
+      const userId = getRequestUserId(req);
+      res.json(await scheduleTask(userId, String(req.params.taskId), req.body ?? {}));
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+app.post("/api/tasks/:taskId/undo", strictWriteLimiter, async (req, res, next) => {
   try {
     const userId = getRequestUserId(req);
+    res.json(await undoTaskSchedule(userId, String(req.params.taskId)));
+  } catch (error) {
+    next(error);
+  }
+});
 
-res.json(
-  await scheduleTask(
-    userId,
-    req.params.taskId,
-    req.body ?? {}
-  )
+app.post(
+  "/api/flex-shift/preview",
+  strictWriteLimiter,
+  validateBody({ startIso: isoDateField(), endIso: isoDateField() }),
+  async (req, res, next) => {
+    try {
+      res.json(await previewFlexShift({ startIso: req.body.startIso, endIso: req.body.endIso }));
+    } catch (error) {
+      next(error);
+    }
+  }
 );
-  } catch (error) {
-    next(error);
+
+app.post(
+  "/api/flex-shift/apply",
+  strictWriteLimiter,
+  validateBody({
+    eventId: stringField(200),
+    title: stringField(200),
+    oldStartIso: isoDateField(),
+    oldEndIso: isoDateField(),
+    newStartIso: isoDateField(),
+    newEndIso: isoDateField(),
+    reason: optional(stringField(1_000)),
+  }),
+  async (req, res, next) => {
+    try {
+      res.json(
+        await applyFlexShift({
+          eventId: req.body.eventId,
+          title: req.body.title,
+          oldStartIso: req.body.oldStartIso,
+          oldEndIso: req.body.oldEndIso,
+          newStartIso: req.body.newStartIso,
+          newEndIso: req.body.newEndIso,
+          reason: req.body.reason,
+        })
+      );
+    } catch (error) {
+      next(error);
+    }
   }
-});
-
-app.post("/api/tasks/:taskId/undo", async (req, res, next) => {
-  try {
-    const userId = getRequestUserId(req);
-
-res.json(
-  await undoTaskSchedule(userId, req.params.taskId)
 );
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/flex-shift/preview", async (req, res, next) => {
-  try {
-    res.json(
-      await previewFlexShift({
-        startIso: req.body?.startIso,
-        endIso: req.body?.endIso,
-      })
-    );
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/flex-shift/apply", async (req, res, next) => {
-  try {
-    res.json(
-      await applyFlexShift({
-        eventId: req.body?.eventId,
-        title: req.body?.title,
-        oldStartIso: req.body?.oldStartIso,
-        oldEndIso: req.body?.oldEndIso,
-        newStartIso: req.body?.newStartIso,
-        newEndIso: req.body?.newEndIso,
-        reason: req.body?.reason,
-      })
-    );
-  } catch (error) {
-    next(error);
-  }
-});
 
 app.post("/api/cron/retry-calendar-writes", async (req, res, next) => {
   try {
+    if (!requireCron(req, res)) return;
     const limit = Number(req.body?.limit ?? 10);
-    res.json(await retryCalendarWrites(limit));
+    res.json(await retryCalendarWrites(Number.isFinite(limit) ? limit : 10));
   } catch (error) {
     next(error);
   }
 });
 
-app.get("/api/cron/retry-calendar-writes", async (_req, res, next) => {
+app.get("/api/cron/retry-calendar-writes", async (req, res, next) => {
   try {
+    if (!requireCron(req, res)) return;
     res.json(await retryCalendarWrites(10));
   } catch (error) {
     next(error);
   }
 });
 
-app.post("/api/google/disconnect", async (req, res, next) => {
+app.post("/api/google/disconnect", strictWriteLimiter, async (req, res, next) => {
   try {
     const userId = getRequestUserId(req);
     res.json(await disconnectGoogleCalendar(userId));
@@ -652,57 +698,25 @@ app.post("/api/google/disconnect", async (req, res, next) => {
   }
 });
 
-app.post("/api/user/reset-pattern-profile", async (req, res, next) => {
+app.post("/api/user/reset-pattern-profile", strictWriteLimiter, async (req, res, next) => {
   try {
     const userId = getRequestUserId(req);
-res.json(await resetPatternProfile(userId));
+    res.json(await resetPatternProfile(userId));
   } catch (error) {
     next(error);
   }
 });
 
-app.post("/api/user/clear-history", async (req, res, next) => {
+app.post("/api/user/clear-history", strictWriteLimiter, async (req, res, next) => {
   try {
     const userId = getRequestUserId(req);
-res.json(await clearUserHistory(userId));
+    res.json(await clearUserHistory(userId));
   } catch (error) {
     next(error);
   }
 });
 
-app.use(
-  (
-    error: unknown,
-    _req: express.Request,
-    res: express.Response,
-    _next: express.NextFunction
-  ) => {
-    console.error(error);
-
-    const statusCode =
-      typeof (error as any)?.statusCode === "number"
-        ? (error as any).statusCode
-        : 500;
-
-    res.status(statusCode).json({
-      ok: false,
-      error: error instanceof Error ? error.message : "Unknown server error",
-    });
-  }
-);
-
-ensureDemoUser()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`Focus20 API running on http://localhost:${PORT}`);
-    });
-  })
-  .catch((error) => {
-    console.error("Failed to start Focus20 API:", error);
-    process.exit(1);
-  });
-
-  app.post("/api/push/subscribe", async (req, res, next) => {
+app.post("/api/push/subscribe", strictWriteLimiter, async (req, res, next) => {
   try {
     const userId = getRequestUserId(req);
     res.json(await savePushSubscription(userId, req.body));
@@ -711,21 +725,23 @@ ensureDemoUser()
   }
 });
 
-app.post("/api/push/unsubscribe", async (req, res, next) => {
-  try {
-    const userId = getRequestUserId(req);
-    res.json(
-      await deletePushSubscription(userId, String(req.body?.endpoint ?? ""))
-    );
-  } catch (error) {
-    next(error);
+app.post(
+  "/api/push/unsubscribe",
+  strictWriteLimiter,
+  validateBody({ endpoint: stringField(2_000) }),
+  async (req, res, next) => {
+    try {
+      const userId = getRequestUserId(req);
+      res.json(await deletePushSubscription(userId, String(req.body?.endpoint ?? "")));
+    } catch (error) {
+      next(error);
+    }
   }
-});
+);
 
-app.post("/api/push/test", async (req, res, next) => {
+app.post("/api/push/test", strictWriteLimiter, async (req, res, next) => {
   try {
     const userId = getRequestUserId(req);
-
     res.json(
       await sendPushToUser(userId, {
         title: "Focus20 notifications are ready",
@@ -739,7 +755,7 @@ app.post("/api/push/test", async (req, res, next) => {
   }
 });
 
-app.post("/api/notifications/end-of-day", async (req, res, next) => {
+app.post("/api/notifications/end-of-day", strictWriteLimiter, async (req, res, next) => {
   try {
     const userId = getRequestUserId(req);
     res.json(await scheduleEndOfDayCheckin(userId));
@@ -750,16 +766,7 @@ app.post("/api/notifications/end-of-day", async (req, res, next) => {
 
 app.post("/api/cron/notifications", async (req, res, next) => {
   try {
-    const secret = req.headers["x-cron-secret"];
-
-    if (
-      process.env.CRON_SECRET &&
-      secret !== process.env.CRON_SECRET
-    ) {
-      res.status(401).json({ ok: false, error: "Unauthorized cron." });
-      return;
-    }
-
+    if (!requireCron(req, res)) return;
     res.json(await processNotificationQueue());
   } catch (error) {
     next(error);
@@ -775,7 +782,7 @@ app.get("/api/recovery/suggestion", async (req, res, next) => {
   }
 });
 
-app.post("/api/recovery/reschedule", async (req, res, next) => {
+app.post("/api/recovery/reschedule", strictWriteLimiter, async (req, res, next) => {
   try {
     const userId = getRequestUserId(req);
     res.json(await autoRescheduleMissedWork(userId));
@@ -784,8 +791,43 @@ app.post("/api/recovery/reschedule", async (req, res, next) => {
   }
 });
 
-const PORT = Number(process.env.PORT || 8787);
+app.use(
+  (
+    error: unknown,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction
+  ) => {
+    const statusCode =
+      typeof (error as { statusCode?: unknown })?.statusCode === "number"
+        ? ((error as { statusCode: number }).statusCode)
+        : 500;
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Focus20 API running on http://0.0.0.0:${PORT}`);
-});
+    const safeMessage =
+      statusCode >= 500
+        ? "Something went wrong. Please try again."
+        : error instanceof Error
+          ? error.message
+          : "Request failed.";
+
+    if (process.env.NODE_ENV !== "production") {
+      console.error(error);
+    }
+
+    res.status(statusCode).json({ ok: false, error: safeMessage });
+  }
+);
+
+ensureDemoUser()
+  .then(() => {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Focus20 API running on http://0.0.0.0:${PORT}`);
+    });
+  })
+  .catch((error) => {
+    console.error("Failed to start Focus20 API.");
+    if (process.env.NODE_ENV !== "production") {
+      console.error(error);
+    }
+    process.exit(1);
+  });
