@@ -388,11 +388,13 @@ const confidence = Math.max(
 );
 
 const isLowQualityRecommendation =
-  predictedImpact < 4 || confidence < 50;
+  predictedImpact < 7 ||
+  confidence < 60 ||
+  highLeverageScore < 0.8;
 
-if (isLowQualityRecommendation && leverCategory === "health") {
+if (isLowQualityRecommendation) {
   console.warn(
-    "Low-confidence health task selected. Recommendation engine should search for a stronger candidate."
+    "Low-quality recommendation selected. Consider improving task quality or fallback logic."
   );
 }
 
