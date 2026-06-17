@@ -434,59 +434,75 @@ export async function buildPlannerInput(
     (task) => task.status === "scheduled"
   ).length;
 
-  const candidateTasks: PlannerCandidate[] = recentTasks
-    .filter((task) => task.status !== "completed")
-    .map((task) => {
-      const category = normalizeCategory(task.category);
-      const overdue = Boolean(task.dueDateIso && task.dueDateIso < now);
-      const dueDate = task.dueDateIso ? new Date(task.dueDateIso) : null;
-      const daysOverdue = overdue && dueDate ? Math.max(1, daysBetween(now, dueDate)) : 0;
+ const candidateTasks: PlannerCandidate[] = recentTasks
+  .filter((task) => task.status !== "completed")
+  .map((task) => {
+    const category = normalizeCategory(task.category);
+    const overdue = Boolean(task.dueDateIso && task.dueDateIso < now);
+    const dueDate = task.dueDateIso ? new Date(task.dueDateIso) : null;
+    const daysOverdue =
+      overdue && dueDate ? Math.max(1, daysBetween(now, dueDate)) : 0;
 
-      const historicalScore = categoryScoreFromProfile(patternProfile, category) * 30;
-      const urgencyScore = overdue
-        ? clamp(16 + daysOverdue * 3, 16, 30)
-        : task.dueDateIso
-          ? 10
-          : 4;
+    const historicalScore =
+      categoryScoreFromProfile(patternProfile, category) * 30;
 
-      const streakScore = completedStreakDays > 0 ? clamp(6 + completedStreakDays, 0, 15) : 0;
-      const energyScore = bestWindowScore;
-      const scheduledPenalty = task.status === "scheduled" ? -4 : 0;
+    const urgencyScore = overdue
+      ? clamp(16 + daysOverdue * 3, 16, 30)
+      : task.dueDateIso
+        ? 10
+        : 4;
 
-      const totalScore =
-        historicalScore +
-        urgencyScore +
-        streakScore +
-        meetingDensityScore +
-        energyScore +
-        scheduledPenalty;
+    const streakScore =
+      completedStreakDays > 0 ? clamp(6 + completedStreakDays, 0, 15) : 0;
 
-      const reasonSignals: string[] = [];
+    const energyScore = bestWindowScore;
+    const scheduledPenalty = task.status === "scheduled" ? -4 : 0;
 
-      if (overdue) reasonSignals.push("it is overdue");
-      if (historicalScore >= 20) reasonSignals.push(`${category} has been a strong lever`);
-      if (streakScore > 0) reasonSignals.push("it protects your current progress streak");
-      if (energyScore >= 15) {
-        reasonSignals.push("it fits one of your stronger focus windows");
-      }
+    const baseScore =
+      historicalScore +
+      urgencyScore +
+      streakScore +
+      meetingDensityScore +
+      energyScore +
+      scheduledPenalty;
 
-      return {
-        id: task.id,
-        source: "task",
-        title: task.title,
-        category,
-        dueDateIso: task.dueDateIso?.toISOString() ?? null,
-        overdue,
-        scheduled: task.status === "scheduled",
-        historicalScore,
-        urgencyScore,
-        streakScore,
-        meetingDensityScore,
-        energyScore,
-        totalScore,
-        reasonSignals,
-      };
-    });
+    const lowLeveragePenalty =
+      (category === "health" || category === "admin") && baseScore < 60
+        ? -25
+        : 0;
+
+    const totalScore = baseScore + lowLeveragePenalty;
+
+    const reasonSignals: string[] = [];
+
+    if (overdue) reasonSignals.push("it is overdue");
+    if (historicalScore >= 20) {
+      reasonSignals.push(`${category} has been a strong lever`);
+    }
+    if (streakScore > 0) {
+      reasonSignals.push("it protects your current progress streak");
+    }
+    if (energyScore >= 15) {
+      reasonSignals.push("it fits one of your stronger focus windows");
+    }
+
+    return {
+      id: task.id,
+      source: "task",
+      title: task.title,
+      category,
+      dueDateIso: task.dueDateIso?.toISOString() ?? null,
+      overdue,
+      scheduled: task.status === "scheduled",
+      historicalScore,
+      urgencyScore,
+      streakScore,
+      meetingDensityScore,
+      energyScore,
+      totalScore,
+      reasonSignals,
+    };
+  });
 
   function timeWindowLabelFromHour(hour: number) {
   if (hour >= 5 && hour < 12) return "morning";
