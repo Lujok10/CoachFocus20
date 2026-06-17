@@ -132,10 +132,8 @@ function calculateStreakDays(blocks: any[], tasks: any[]) {
 function getWindowLabel(date: Date) {
   const hour = date.getHours();
 
-  if (hour < 10) return "early morning";
-  if (hour < 12) return "late morning";
-  if (hour < 15) return "early afternoon";
-  if (hour < 18) return "late afternoon";
+  if (hour < 12) return "morning";
+  if (hour < 18) return "afternoon";
 
   return "evening";
 }
