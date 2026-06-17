@@ -188,7 +188,7 @@ function buildWhy(candidate: PlannerCandidate, input: PlannerInput) {
   }
 
   if (candidate.energyScore >= 18) {
-    reasons.push(`your ${input.contextSignals.energyWindowLabel} window has been productive`);
+    reasons.push("this aligns with one of your stronger focus windows");
   }
 
   if (input.contextSignals.meetingDensityScore >= 15) {
@@ -252,9 +252,12 @@ function sanitizePlannerOutput(output: PlannerOutput): PlannerOutput {
   const category = normalizeCategory(output.leverCategory);
 
   return {
-    leverTitle:
-      output.leverTitle?.slice(0, 90) ||
-      "protect your highest-leverage task",
+    leverTitle: improveRecommendationTitle({
+      title:
+        output.leverTitle?.slice(0, 90) ||
+        "protect your highest-leverage task",
+      category,
+    }),
     leverCategory: category,
     why:
       output.why?.slice(0, 220) ||
@@ -465,7 +468,9 @@ export async function buildPlannerInput(
       if (overdue) reasonSignals.push("it is overdue");
       if (historicalScore >= 20) reasonSignals.push(`${category} has been a strong lever`);
       if (streakScore > 0) reasonSignals.push("it protects your current progress streak");
-      if (energyScore >= 15) reasonSignals.push("it fits your best time window");
+      if (energyScore >= 15) {
+        reasonSignals.push("it fits one of your stronger focus windows");
+      }
 
       return {
         id: task.id,
@@ -485,6 +490,41 @@ export async function buildPlannerInput(
       };
     });
 
+  function timeWindowLabelFromHour(hour: number) {
+  if (hour >= 5 && hour < 12) return "morning";
+  if (hour >= 12 && hour < 17) return "afternoon";
+  if (hour >= 17 && hour < 22) return "evening";
+  return "late-night";
+}
+
+  function fallbackTitleForCategory(category: LeverCategory) {
+  if (category === "income") {
+    return "Complete one revenue-building task";
+  }
+
+  if (category === "learning") {
+    return "Complete one career-building study block";
+  }
+
+  if (category === "admin") {
+    return "Clear one important admin blocker";
+  }
+
+  if (category === "health") {
+    return "Complete one energy-building health block";
+  }
+
+  if (category === "family") {
+    return "Handle one important family commitment";
+  }
+
+  if (category === "creative") {
+    return "Ship one creative output";
+  }
+
+  return "Complete one high-leverage focus block";
+}  
+
   const profileFallbackCandidates: PlannerCandidate[] = (
     (patternProfile?.leverRankings as Array<{
       category: string;
@@ -500,7 +540,7 @@ export async function buildPlannerInput(
       return {
         id: `pattern_${category}`,
         source: "focus_pattern",
-        title: `move the highest-impact ${category} lever forward`,
+        title: fallbackTitleForCategory(category),
         category,
         dueDateIso: null,
         overdue: false,
@@ -570,6 +610,50 @@ const allCandidates: PlannerCandidate[] =
   };
 }
 
+function improveRecommendationTitle(candidate: {
+  title: string;
+  category: string;
+}) {
+  const rawTitle = candidate.title.trim();
+
+  const genericTitles = [
+    "move the highest-impact income lever forward",
+    "protect your highest-leverage task",
+    "advance your top priority",
+    "work on your most important task",
+  ];
+
+  const isGeneric = genericTitles.some(
+    (title) => rawTitle.toLowerCase() === title
+  );
+
+  if (!isGeneric) {
+    return rawTitle;
+  }
+
+  if (candidate.category === "income") {
+    return "Complete one income-generating action";
+  }
+
+  if (candidate.category === "learning") {
+    return "Complete one career-building learning block";
+  }
+
+  if (candidate.category === "admin") {
+    return "Clear one high-priority admin task";
+  }
+
+  if (candidate.category === "health") {
+    return "Complete one energy-building health block";
+  }
+
+  if (candidate.category === "family") {
+    return "Complete one important family commitment";
+  }
+
+  return "Complete one high-leverage focus block";
+}
+
 export async function runLocalPlanner(
   userId: string
 ): Promise<PlannerOutput> {
@@ -593,7 +677,7 @@ export async function runLocalPlanner(
   );
 
   return {
-    leverTitle: best.title,
+    leverTitle: improveRecommendationTitle(best),
     leverCategory: best.category,
     why: buildWhy(best, input),
     plan: buildPlan(best),
@@ -618,7 +702,7 @@ export async function runAiPlanner(
         {
           role: "system",
           content:
-            "You are Focus20's AI-first Deployment Coach. Pick exactly one highest-leverage outcome for today. Be calm, specific, and decisive. Use the candidate scores, overdue pressure, completion streak, meeting density, and energy window. Do not mention formulas. Do not create long lists. Return JSON only.",
+            "You are Focus20's AI-first Deployment Coach. Pick exactly one highest-leverage outcome for today. Be calm, specific, and decisive. Use the candidate scores, overdue pressure, completion streak, meeting density, and focus-window strength. Do not claim a specific time of day unless it is explicitly provided. Do not mention formulas. Do not create long lists. Return JSON only.",
         },
         {
           role: "user",
@@ -701,3 +785,4 @@ export async function runAiPlanner(
     return runLocalPlanner(userId);
   }
 }
+

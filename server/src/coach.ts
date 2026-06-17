@@ -16,6 +16,33 @@ import {
   scheduleEndOfDayCheckin,
 } from "./push";
 
+function categoryPriority(category: LeverCategory) {
+  if (category === "income") return 10;
+  if (category === "learning") return 8;
+  if (category === "admin") return 6;
+  if (category === "creative") return 5;
+  if (category === "family") return 4;
+  if (category === "health") return 3;
+
+  return 1;
+}
+
+function calculateHighLeverageScore(input: {
+  category: LeverCategory;
+  confidence: number;
+  durationMinutes: number;
+}) {
+  const categoryScore = categoryPriority(input.category);
+  const confidenceScore = Math.max(0, Math.min(1, input.confidence / 100));
+  const effortPenalty = Math.min(3, input.durationMinutes / 60);
+
+  return categoryScore + confidenceScore * 4 - effortPenalty;
+}
+
+function scoreToPredictedImpact(score: number) {
+  return Math.max(1, Math.min(10, Math.round(score)));
+}
+
 type ReservationStatus = "reserved" | "suggested" | "queued" | "cancelled";
 
 type LeverCategory =
@@ -174,7 +201,9 @@ function buildWakePlan(input: {
 
     why:
       planner.why ||
-      "This is your next protected execution block based on your recent pattern.",
+      (block.predictedImpact >= 7
+        ? "This is a high-leverage block based on category priority, confidence, and effort."
+        : "This is the best available block right now, but Focus20 will continue looking for stronger high-leverage opportunities."),
 
     plan:
       planner.plan?.slice(0, 3) ?? [
@@ -335,44 +364,73 @@ export async function refreshWakePlan(userId: string, force = false) {
   includeGoogleBusy: canWriteToCalendar,
 });
 
-  const title = `Focus 20: ${planner.leverTitle}`;
-  const leverCategory = planner.leverCategory as LeverCategory;
-  const predictedImpact = Math.max(1, Math.round(planner.confidence / 20));
-  const confidence = Math.max(35, Math.min(95, Math.round(planner.confidence)));
+const title = `Focus 20: ${planner.leverTitle}`;
+const leverCategory = planner.leverCategory as LeverCategory;
 
-  let block = existing;
+const durationMinutes =
+  Math.round(
+    (new Date(slot.end).getTime() -
+      new Date(slot.start).getTime()) /
+      60000
+  ) || 60;
 
-  if (!block || force) {
-    block = await prisma.focusBlock.create({
-  data: {
-    userId,
-    provider: canWriteToCalendar ? "google" : "local",
-    providerEventId: null,
-    title,
-    startIso: slot.start,
-    endIso: slot.end,
-    status: "scheduled",
-    leverCategory,
-    predictedImpact,
-    confidence,
-  },
+const highLeverageScore = calculateHighLeverageScore({
+  category: leverCategory,
+  confidence: planner.confidence,
+  durationMinutes,
 });
 
-  } else if (force) {
-    block = await prisma.focusBlock.update({
-      where: { id: block.id },
-      data: {
-        title,
-        startIso: slot.start,
-        endIso: slot.end,
-        leverCategory,
-        predictedImpact,
-        confidence,
-      },
-    });
-  }
+const predictedImpact = scoreToPredictedImpact(highLeverageScore);
 
-  if (rules.notificationsEnabled && rules.completedFirstLever) {
+const confidence = Math.max(
+  predictedImpact >= 8 ? 65 : 35,
+  Math.min(95, Math.round(planner.confidence))
+);
+
+const isLowQualityRecommendation =
+  predictedImpact < 4 || confidence < 50;
+
+if (isLowQualityRecommendation && leverCategory === "health") {
+  console.warn(
+    "Low-confidence health task selected. Recommendation engine should search for a stronger candidate."
+  );
+}
+
+
+
+
+let block = existing;
+
+if (!block) {
+  block = await prisma.focusBlock.create({
+    data: {
+      userId,
+      provider: canWriteToCalendar ? "google" : "local",
+      providerEventId: null,
+      title,
+      startIso: slot.start,
+      endIso: slot.end,
+      status: "scheduled",
+      leverCategory,
+      predictedImpact,
+      confidence,
+    },
+  });
+} else {
+  block = await prisma.focusBlock.update({
+    where: { id: block.id },
+    data: {
+      title,
+      startIso: slot.start,
+      endIso: slot.end,
+      leverCategory,
+      predictedImpact,
+      confidence,
+    },
+  });
+}
+
+if (rules.notificationsEnabled && rules.completedFirstLever) {
   await scheduleFocusBlockNotifications({
     userId,
     focusBlockId: block.id,
@@ -382,7 +440,6 @@ export async function refreshWakePlan(userId: string, force = false) {
 
   await scheduleEndOfDayCheckin(userId).catch(console.error);
 }
-
   let providerEventId = block.providerEventId;
   let reservationStatus: ReservationStatus = canWriteToCalendar
     ? "reserved"
