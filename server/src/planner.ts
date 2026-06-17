@@ -142,9 +142,9 @@ function getDefaultWindows() {
   const today = new Date();
 
   const configs = [
-    { start: "09:30", end: "10:30", score: 0.8, label: "late morning" },
-    { start: "11:00", end: "12:00", score: 0.72, label: "late morning" },
-    { start: "14:00", end: "15:00", score: 0.62, label: "early afternoon" },
+    { start: "09:30", end: "10:30", score: 0.8, label: "strong focus" },
+    { start: "11:00", end: "12:00", score: 0.72, label: "strong focus" },
+    { start: "14:00", end: "15:00", score: 0.62, label: "strong focus" },
   ];
 
   return configs.map((item) => {
@@ -421,7 +421,7 @@ export async function buildPlannerInput(
 
   const bestWindow = availableWindows.sort((a, b) => b.score - a.score)[0];
   const bestWindowScore = clamp((bestWindow?.score ?? 0.6) * 25, 0, 25);
-  const energyWindowLabel = bestWindow?.label ?? "late morning";
+  const energyWindowLabel = "strong focus";
 
   const overdueTaskCount = recentTasks.filter(
     (task) =>

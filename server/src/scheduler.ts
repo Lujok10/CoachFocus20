@@ -277,12 +277,12 @@ function scoreSlot(input: {
 
   if (hour >= 9 && hour <= 12) {
     score += 8;
-    reasons.push("Strong morning execution window");
+    reasons.push("Strong available execution window");
   }
 
   if (hour >= 13 && hour <= 16) {
     score += 4;
-    reasons.push("Usable afternoon focus window");
+    reasons.push("Usable available focus window");
   }
 
   if (hour >= 18) {
