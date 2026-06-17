@@ -435,9 +435,43 @@ export async function buildPlannerInput(
   ).length;
 
  const candidateTasks: PlannerCandidate[] = recentTasks
-  .filter((task) => task.status !== "completed")
+  .filter(
+  (task) =>
+    task.status !== "completed" &&
+    task.title &&
+    task.title.trim().length >= 4
+)
   .map((task) => {
-    const category = normalizeCategory(task.category);
+    let category = normalizeCategory(task.category);
+
+    const title = task.title.toLowerCase();
+
+      if (
+        title.includes("gym") ||
+        title.includes("run") ||
+        title.includes("workout") ||
+        title.includes("exercise")
+      ) {
+        category = "health";
+      }
+
+      if (
+        title.includes("study") ||
+        title.includes("reading") ||
+        title.includes("read") ||
+        title.includes("course")
+      ) {
+        category = "learning";
+      }
+
+      if (
+        title.includes("work") ||
+        title.includes("client") ||
+        title.includes("business") ||
+        title.includes("video")
+      ) {
+        category = "income";
+      }
     const overdue = Boolean(task.dueDateIso && task.dueDateIso < now);
     const dueDate = task.dueDateIso ? new Date(task.dueDateIso) : null;
     const daysOverdue =
