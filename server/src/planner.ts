@@ -436,42 +436,51 @@ export async function buildPlannerInput(
 
  const candidateTasks: PlannerCandidate[] = recentTasks
   .filter(
-  (task) =>
-    task.status !== "completed" &&
-    task.title &&
-    task.title.trim().length >= 4
-)
+    (task) =>
+      task.status !== "completed" &&
+      task.title &&
+      task.title.trim().length >= 8
+  )
   .map((task) => {
     let category = normalizeCategory(task.category);
 
-    const title = task.title.toLowerCase();
+    const title = task.title.trim();
+    const titleLower = title.toLowerCase();
 
-      if (
-        title.includes("gym") ||
-        title.includes("run") ||
-        title.includes("workout") ||
-        title.includes("exercise")
-      ) {
-        category = "health";
-      }
+    if (
+      titleLower.includes("gym") ||
+      titleLower.includes("run") ||
+      titleLower.includes("workout") ||
+      titleLower.includes("exercise")
+    ) {
+      category = "health";
+    }
 
-      if (
-        title.includes("study") ||
-        title.includes("reading") ||
-        title.includes("read") ||
-        title.includes("course")
-      ) {
-        category = "learning";
-      }
+    if (
+      titleLower.includes("study") ||
+      titleLower.includes("reading") ||
+      titleLower.includes("read") ||
+      titleLower.includes("course")
+    ) {
+      category = "learning";
+    }
 
-      if (
-        title.includes("work") ||
-        title.includes("client") ||
-        title.includes("business") ||
-        title.includes("video")
-      ) {
-        category = "income";
-      }
+    if (
+      titleLower.includes("work") ||
+      titleLower.includes("client") ||
+      titleLower.includes("business") ||
+      titleLower.includes("video")
+    ) {
+      category = "income";
+    }
+
+    const looksLikeGarbage =
+      !/[aeiou]/i.test(title) || /^[a-z]{1,6}$/i.test(title);
+
+    if (looksLikeGarbage) {
+      return null;
+    }
+
     const overdue = Boolean(task.dueDateIso && task.dueDateIso < now);
     const dueDate = task.dueDateIso ? new Date(task.dueDateIso) : null;
     const daysOverdue =
@@ -521,22 +530,23 @@ export async function buildPlannerInput(
     }
 
     return {
-      id: task.id,
-      source: "task",
-      title: task.title,
-      category,
-      dueDateIso: task.dueDateIso?.toISOString() ?? null,
-      overdue,
-      scheduled: task.status === "scheduled",
-      historicalScore,
-      urgencyScore,
-      streakScore,
-      meetingDensityScore,
-      energyScore,
-      totalScore,
-      reasonSignals,
-    };
-  });
+        id: task.id,
+        source: "task",
+        title: task.title,
+        category,
+        dueDateIso: task.dueDateIso?.toISOString() ?? null,
+        overdue,
+        scheduled: task.status === "scheduled",
+        historicalScore,
+        urgencyScore,
+        streakScore,
+        meetingDensityScore,
+        energyScore,
+        totalScore,
+        reasonSignals,
+      };
+    })
+    .filter(Boolean) as PlannerCandidate[];
 
   function timeWindowLabelFromHour(hour: number) {
   if (hour >= 5 && hour < 12) return "morning";
