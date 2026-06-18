@@ -760,7 +760,7 @@ export async function runAiPlanner(
         {
           role: "system",
           content:
-            "You are Focus20's AI-first Deployment Coach. Pick exactly one highest-leverage outcome for today. Be calm, specific, and decisive. Use the candidate scores, overdue pressure, completion streak, meeting density, and focus-window strength. Do not claim a specific time of day unless it is explicitly provided. Do not mention formulas. Do not create long lists. Return JSON only.",
+            "You are Focus20's AI-first Deployment Coach. Pick exactly one highest-leverage outcome for today. Be calm, specific, and decisive. Use the candidate scores, overdue pressure, completion streak, meeting density, and focus-window strength. Never mention morning, afternoon, evening, or any specific time of day in the why field. Describe timing only as an available focus window. Do not mention formulas. Do not create long lists. Return JSON only."
         },
         {
           role: "user",
