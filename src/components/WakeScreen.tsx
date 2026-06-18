@@ -1,10 +1,10 @@
 import { motion } from "framer-motion";
 import {
-  ChevronUp,
-  Play,
-  Mic,
-  Undo2,
   CalendarPlus,
+  ChevronUp,
+  Mic,
+  Play,
+  Undo2,
   WifiOff,
 } from "lucide-react";
 import { WakePlan } from "../types";
@@ -16,6 +16,69 @@ interface WakeScreenProps {
   onUndo: () => void;
   onStartFocus: () => void;
   onVoiceCheckIn: () => void;
+}
+
+function MetricPill({
+  variant,
+  children,
+}: {
+  variant: "impact" | "effort" | "confidence" | "pareto";
+  children: React.ReactNode;
+}) {
+  const classes = {
+    impact: "bg-emerald-100 text-emerald-700",
+    effort: "bg-blue-100 text-blue-700",
+    confidence: "bg-purple-100 text-purple-700",
+    pareto: "bg-amber-100 text-amber-700",
+  };
+
+  return (
+    <div
+      className={`rounded-full px-6 py-4 text-center text-base font-bold ${classes[variant]}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function WeeklyParetoCard() {
+  return (
+   <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 className="text-lg font-bold text-slate-900">
+        This Week&apos;s Best Pareto 20%
+      </h2>
+
+      <div className="mt-5 flex flex-col items-center justify-center gap-6 md:flex-row">
+        <div className="relative h-52 w-52 rounded-full">
+          <div
+            className="absolute inset-0 rounded-full"
+            style={{
+              background:
+                "conic-gradient(rgb(16 185 129) 0deg 72deg, rgb(226 232 240) 72deg 360deg)",
+            }}
+          />
+          <div className="absolute inset-12 rounded-full bg-white" />
+          <div className="absolute inset-0 flex items-center justify-center text-xl font-black text-slate-700">
+            20%
+          </div>
+        </div>
+
+        <div className="space-y-4 text-sm font-semibold">
+          <div className="flex items-center gap-3 text-emerald-600">
+            <span className="h-3 w-3 rounded-full bg-emerald-500" />
+            Best Pareto 20%
+          </div>
+
+          <div className="h-px w-36 bg-slate-200" />
+
+          <div className="flex items-center gap-3 text-slate-600">
+            <span className="h-3 w-3 rounded-full bg-slate-300" />
+            Other 80%
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function WakeScreen({
@@ -39,24 +102,25 @@ export function WakeScreen({
       ? Math.round(wakePlan.confidence)
       : Math.round((wakePlan?.confidence ?? 0.82) * 100);
 
-      const impactValue =
-      wakePlan?.impact ??
-      wakePlan?.lever?.predictedImpact ??
-      wakePlan?.block?.predictedImpact ??
-      5;
+  const impactValue =
+    wakePlan?.impact ??
+    wakePlan?.lever?.predictedImpact ??
+    wakePlan?.block?.predictedImpact ??
+    5;
 
   const impactLabel =
-    impactValue >= 8
-      ? "High"
-      : impactValue >= 5
-        ? "Medium"
-        : "Low";
+    impactValue >= 8 ? "High" : impactValue >= 5 ? "Medium" : "Low";
+
+  const effortMinutes =
+    wakePlan?.effortMinutes ?? wakePlan?.block?.durationMinutes ?? 60;
+
+  const paretoScore = (wakePlan?.paretoScore ?? 0).toFixed(2);
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-slate-50 px-6">
+    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-slate-50 px-5">
       <div className="absolute left-0 right-0 top-0 h-1 bg-gradient-to-r from-emerald-400 via-teal-500 to-cyan-500" />
 
-      <div className="flex max-w-lg flex-1 flex-col items-center justify-center text-center">
+      <div className="flex w-full max-w-2xl flex-1 flex-col items-center justify-center text-center">
         {wakePlan && (
           <>
             <motion.div
@@ -65,14 +129,14 @@ export function WakeScreen({
               className="mb-6"
             >
               <span
-                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium ${
+                className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold ${
                   wakePlan.isReserved
                     ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                     : "border-amber-200 bg-amber-50 text-amber-700"
                 }`}
               >
                 {wakePlan.calendarReconnectRequired ? (
-                  <WifiOff className="h-3.5 w-3.5" />
+                  <WifiOff className="h-4 w-4" />
                 ) : (
                   <span className="h-2 w-2 rounded-full bg-current" />
                 )}
@@ -84,92 +148,75 @@ export function WakeScreen({
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35 }}
-              className="mb-6 w-full rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-sm"
+              className="w-full rounded-[32px] border border-slate-200 bg-white p-5 text-left shadow-sm"
             >
-              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
-                Best 20% Move Today
+              <p className="bg-gradient-to-r from-emerald-500 to-green-400 bg-clip-text text-3xl font-black leading-none tracking-tight text-transparent">
+                Pareto 20%
               </p>
 
-              <h1 className="mt-2 text-2xl font-bold text-slate-900">
-                {wakePlan.leverName ?? wakePlan.lever?.title ?? wakePlan.block.title}
+              <h1 className="mt-5 text-3xl font-black leading-tight text-slate-900">
+                {wakePlan.leverName ??
+                  wakePlan.lever?.title ??
+                  wakePlan.block.title}
               </h1>
 
-              <p className="mt-2 text-sm text-slate-500">
+              <p className="mt-4 text-base font-semibold text-slate-500">
                 Recommended block:{" "}
-                <span className="font-medium text-slate-700">
+                <span className="text-slate-700">
                   {wakePlan.recommendedStart ?? wakePlan.block.startTime}
                   {" - "}
                   {wakePlan.recommendedEnd ?? wakePlan.block.endTime}
                 </span>
               </p>
 
-              <div className="mt-4 rounded-2xl bg-slate-50 p-3">
-                <p className="text-sm font-semibold text-slate-800">
+              <div className="mt-6 rounded-[26px] bg-slate-50 p-7">
+                <p className="text-lg font-black text-slate-900">
                   Why this was selected
                 </p>
 
-                <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                <p className="mt-3 text-lg leading-9 text-slate-600 break-words">
                   {wakePlan.recommendationReason ??
                     wakePlan.why ??
                     "This is your highest-leverage move right now because it fits your available focus window and supports your most important lever."}
                 </p>
               </div>
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
-                Impact: {impactLabel} ({impactValue})
-              </span>
+              <div className="mt-6 grid grid-cols-2 gap-4">
+                <MetricPill variant="impact">
+                  Impact: {impactLabel} ({impactValue})
+                </MetricPill>
 
-                <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
-                  Effort:{" "}
-                  {wakePlan.effortMinutes ?? wakePlan.block.durationMinutes} min
-                </span>
+                <MetricPill variant="effort">
+                  Effort: {effortMinutes} min
+                </MetricPill>
 
-                <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-medium text-purple-700">
+                <MetricPill variant="confidence">
                   Confidence: {confidenceDisplay}%
-                </span>
+                </MetricPill>
 
-                <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
-                  Pareto Score: {(wakePlan.paretoScore ?? 0).toFixed(2)}
-                  
-                </span>
+                <MetricPill variant="pareto">
+                  Pareto Score: {paretoScore}
+                </MetricPill>
               </div>
-                  {wakePlan.nextAction && (
-                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Next Best Action
-                      </p>
 
-                      <p className="mt-1 font-medium text-slate-900">
-                        {wakePlan.nextAction.title}
-                      </p>
-
-                      <p className="mt-1 text-sm text-slate-600">
-                        {wakePlan.nextAction.durationMinutes} min
-                      </p>
-
-                      <p className="mt-2 text-sm text-slate-500">
-                        {wakePlan.nextAction.reason}
-                      </p>
-                    </div>
-                  )}
-              
             </motion.div>
+
+            <WeeklyParetoCard />
           </>
         )}
 
-        <motion.p
+        {/* <motion.p
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
-          className="text-base leading-relaxed text-slate-600"
+          className="mt-8 text-base leading-relaxed text-slate-600"
         >
           {isLoading
             ? "Loading your focus plan..."
             : wakePlan
               ? wakePlan.sentence
               : "Connect your calendar to get started."}
-        </motion.p>
+        </motion.p> */}
 
         {wakePlan?.readOnlyCalendar && (
           <p className="mt-4 text-sm text-amber-700">
@@ -189,7 +236,7 @@ export function WakeScreen({
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-8 flex items-center gap-4"
+        className="mb-8 mt-8 flex items-center gap-4"
       >
         <button
           onClick={onStartFocus}
@@ -224,7 +271,7 @@ export function WakeScreen({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         onClick={onSwipeUp}
-        className="group flex cursor-pointer flex-col items-center gap-2 text-slate-400 transition-colors hover:text-slate-600"
+        className="group mb-6 flex cursor-pointer flex-col items-center gap-2 text-slate-400 transition-colors hover:text-slate-600"
       >
         <span className="text-xs font-medium uppercase tracking-wide">
           Details
