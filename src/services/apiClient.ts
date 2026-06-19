@@ -29,10 +29,12 @@ export async function request<T>(
     ...(isFormData ? {} : { "Content-Type": "application/json" }),
   };
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-    
-  }
+if (token) {
+  console.log("API TOKEN FOUND");
+  headers.Authorization = `Bearer ${token}`;
+} else {
+  console.log("NO API TOKEN");
+}
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
