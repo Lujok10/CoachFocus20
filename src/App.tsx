@@ -51,16 +51,12 @@ export default function App() {
     if (!isLoaded || !isSignedIn) return;
 
     setClerkTokenProvider(async () => {
-      // const token = await getToken({
-      //   template: "focus20",
-      // });
-      const token = await getToken({
-      template: "focus20",
-    });
+  const token = await getToken({
+    template: "focus20-api",
+  });
 
-      return token ?? null;
-    });
-
+  return token ?? null;
+});
     setAuthReady(true);
   }, [isLoaded, isSignedIn, getToken]);
 

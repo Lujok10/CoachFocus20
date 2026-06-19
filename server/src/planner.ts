@@ -488,6 +488,11 @@ export async function buildPlannerInput(
 
     const historicalScore =
       categoryScoreFromProfile(patternProfile, category) * 30;
+      console.log(
+        task.title,
+        category,
+        categoryScoreFromProfile(patternProfile, category)
+      );
 
     const urgencyScore = overdue
       ? clamp(16 + daysOverdue * 3, 16, 30)
