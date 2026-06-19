@@ -51,7 +51,9 @@ export default function App() {
     if (!isLoaded || !isSignedIn) return;
 
     setClerkTokenProvider(async () => {
+
   const token = await getToken();
+  console.log("CLERK TOKEN:", token);
 
   return token ?? null;
 });
