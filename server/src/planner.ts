@@ -506,13 +506,25 @@ export async function buildPlannerInput(
     const energyScore = bestWindowScore;
     const scheduledPenalty = task.status === "scheduled" ? -4 : 0;
 
-    const baseScore =
-      historicalScore +
-      urgencyScore +
-      streakScore +
-      meetingDensityScore +
-      energyScore +
-      scheduledPenalty;
+    const categoryPriorityBoost =
+      category === "income"
+        ? 12
+        : category === "learning"
+          ? 8
+          : category === "health"
+            ? 3
+            : category === "admin"
+              ? 1
+              : 0;
+
+const baseScore =
+  historicalScore +
+  urgencyScore +
+  streakScore +
+  meetingDensityScore +
+  energyScore +
+  scheduledPenalty +
+  categoryPriorityBoost;
 
     const lowLeveragePenalty =
       (category === "health" || category === "admin") && baseScore < 60
