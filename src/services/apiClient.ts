@@ -13,7 +13,7 @@ export async function request<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  
+
   let token: string | null = null;
 
 for (let attempt = 0; attempt < 10; attempt++) {
@@ -38,13 +38,6 @@ for (let attempt = 0; attempt < 10; attempt++) {
 
 if (token) {
   headers.Authorization = `Bearer ${token}`;
-
-  console.log("API TOKEN FOUND");
-  console.log("REQUEST PATH:", path);
-  console.log("AUTH HEADER SET:", !!headers.Authorization);
-} else {
-  console.log("NO API TOKEN");
-  console.log("REQUEST PATH:", path);
 }
 
   const res = await fetch(`${API_BASE_URL}${path}`, {

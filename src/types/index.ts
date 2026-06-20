@@ -56,6 +56,11 @@ export interface WakePlan {
   recommendedEnd?: string;
   leverName?: string;
 
+   paretoWins?: number;
+  weeklyTopLever?: LeverCategory;
+  weeklyProtectedMinutes?: number;
+  weeklyNeedleMoverWins?: number;
+
   nextAction?: {
     title: string;
     durationMinutes: number;
@@ -92,6 +97,9 @@ export interface Alternative {
   title: string;
   time: string;
   category: LeverCategory;
+  whyNotReason?: string;
+  paretoScore?: number;
+  predictedImpact?: number;
 }
 
 export interface TimeLeak {

@@ -178,15 +178,64 @@ function categoryScoreFromProfile(patternProfile: any, category: LeverCategory) 
   return found?.score ?? 0.5;
 }
 
+function categoryValueReason(category: LeverCategory, title: string) {
+  const lowerTitle = title.toLowerCase();
+
+  if (category === "income") {
+    if (lowerTitle.includes("video") || lowerTitle.includes("manhattan")) {
+      return "Publishing this supports audience growth and future revenue opportunities";
+    }
+
+    if (lowerTitle.includes("scholarship")) {
+      return "Completing this can reduce education costs and improve your financial position";
+    }
+
+    if (lowerTitle.includes("oracle") || lowerTitle.includes("onboarding")) {
+      return "Moving this forward protects your career momentum and income stability";
+    }
+
+    return "This directly supports your income and long-term opportunity pipeline";
+  }
+
+  if (category === "learning") {
+    if (lowerTitle.includes("wgu")) {
+      return "Completing this unlocks progress toward your degree plan";
+    }
+
+    if (lowerTitle.includes("enarsi")) {
+      return "This strengthens a high-value networking skill for your career path";
+    }
+
+    return "This builds capability that compounds into future opportunities";
+  }
+
+  if (category === "health") {
+    return "This protects the energy needed to execute your bigger goals";
+  }
+
+  if (category === "family") {
+    return "This protects an important relationship commitment";
+  }
+
+  if (category === "admin") {
+    return "This removes friction that could slow down deeper work";
+  }
+
+  return "This is a strong use of your protected focus block";
+}
+
 function buildWhy(candidate: PlannerCandidate, input: PlannerInput) {
-  const reasons = [...candidate.reasonSignals];
+  const reasons = [
+    categoryValueReason(candidate.category, candidate.title),
+    ...candidate.reasonSignals,
+  ];
 
   if (candidate.overdue) {
-    reasons.push("it is overdue");
+    reasons.push("it is overdue and needs closure");
   }
 
   if (candidate.energyScore >= 18) {
-    reasons.push("this aligns with one of your stronger focus windows");
+    reasons.push("it fits an available strong focus window");
   }
 
   if (input.contextSignals.meetingDensityScore >= 15) {
@@ -194,18 +243,15 @@ function buildWhy(candidate: PlannerCandidate, input: PlannerInput) {
   }
 
   if (input.contextSignals.completedStreakDays > 0) {
-    reasons.push(`you have a ${input.contextSignals.completedStreakDays}-day completion streak to protect`);
+    reasons.push(
+      `you have a ${input.contextSignals.completedStreakDays}-day completion streak to protect`
+    );
   }
 
   const unique = [...new Set(reasons)].slice(0, 3);
 
-  if (unique.length === 0) {
-    return "This is the strongest current needle-mover based on your recent completion pattern.";
-  }
-
-  return `This matters now because ${unique.join(", ")}.`;
+  return `This was selected because ${unique.join(", ")}.`;
 }
-
 function buildPlan(candidate: PlannerCandidate) {
   if (candidate.overdue) {
     return [
@@ -488,11 +534,7 @@ export async function buildPlannerInput(
 
     const historicalScore =
       categoryScoreFromProfile(patternProfile, category) * 30;
-      console.log(
-        task.title,
-        category,
-        categoryScoreFromProfile(patternProfile, category)
-      );
+   
 
     const urgencyScore = overdue
       ? clamp(16 + daysOverdue * 3, 16, 30)

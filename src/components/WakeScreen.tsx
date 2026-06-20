@@ -1,9 +1,13 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   CalendarPlus,
   ChevronUp,
+  HelpCircle,
   Mic,
   Play,
+  Sparkles,
+  Trophy,
   Undo2,
   WifiOff,
 } from "lucide-react";
@@ -41,12 +45,28 @@ function MetricPill({
   );
 }
 
-function WeeklyParetoCard() {
+function categoryIcon(category?: string) {
+  if (category === "income") return "💰";
+  if (category === "learning") return "📚";
+  if (category === "health") return "💪";
+  if (category === "family") return "🏡";
+  if (category === "admin") return "🧩";
+  return "⚡";
+}
+
+function WeeklyParetoCard({ category }: { category?: string }) {
   return (
-   <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 className="text-lg font-bold text-slate-900">
-        This Week&apos;s Best Pareto 20%
-      </h2>
+    <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-bold text-slate-900">
+          This Week&apos;s Best Pareto 20%
+        </h2>
+
+        <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+          <Trophy className="h-3.5 w-3.5" />
+          Pareto Win
+        </div>
+      </div>
 
       <div className="mt-5 flex flex-col items-center justify-center gap-6 md:flex-row">
         <div className="relative h-52 w-52 rounded-full">
@@ -75,6 +95,13 @@ function WeeklyParetoCard() {
             <span className="h-3 w-3 rounded-full bg-slate-300" />
             Other 80%
           </div>
+
+          <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">
+            Top lever:{" "}
+            <span className="font-black">
+              {categoryIcon(category)} {category ?? "focus"}
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -89,6 +116,8 @@ export function WakeScreen({
   onStartFocus,
   onVoiceCheckIn,
 }: WakeScreenProps) {
+  const [whyNotIndex, setWhyNotIndex] = useState<number | null>(null);
+
   const statusLabel = wakePlan?.calendarReconnectRequired
     ? "Reconnect calendar"
     : wakePlan?.readOnlyCalendar
@@ -115,6 +144,15 @@ export function WakeScreen({
     wakePlan?.effortMinutes ?? wakePlan?.block?.durationMinutes ?? 60;
 
   const paretoScore = (wakePlan?.paretoScore ?? 0).toFixed(2);
+
+  const selectedTitle =
+    wakePlan?.leverName ?? wakePlan?.lever?.title ?? wakePlan?.block?.title;
+
+  const selectedCategory =
+    wakePlan?.lever?.category ?? wakePlan?.block?.leverCategory;
+
+  const selectedAlternative =
+    whyNotIndex !== null ? wakePlan?.alternatives?.[whyNotIndex] : null;
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-slate-50 px-5">
@@ -155,9 +193,7 @@ export function WakeScreen({
               </p>
 
               <h1 className="mt-5 text-3xl font-black leading-tight text-slate-900">
-                {wakePlan.leverName ??
-                  wakePlan.lever?.title ??
-                  wakePlan.block.title}
+                {categoryIcon(selectedCategory)} {selectedTitle}
               </h1>
 
               <p className="mt-4 text-base font-semibold text-slate-500">
@@ -199,24 +235,70 @@ export function WakeScreen({
                 </MetricPill>
               </div>
 
+              {wakePlan.alternatives?.length > 0 && (
+                <div className="mt-6 rounded-[24px] border border-slate-200 bg-white p-4">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-emerald-500" />
+                    <p className="text-sm font-black uppercase tracking-wide text-slate-500">
+                      Other strong options today
+                    </p>
+                  </div>
+
+                  <div className="mt-3 space-y-3">
+                    {wakePlan.alternatives.slice(0, 2).map((alt, index) => (
+                      <div
+                        key={`${alt.title}-${index}`}
+                        className="rounded-2xl bg-slate-50 p-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-bold text-slate-900">
+                              {categoryIcon(alt.category)} {alt.title}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-500">
+                              {alt.category} • {alt.time}
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setWhyNotIndex(
+                                whyNotIndex === index ? null : index
+                              )
+                            }
+                            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600"
+                          >
+                            <HelpCircle className="h-3.5 w-3.5" />
+                            Why not?
+                          </button>
+                        </div>
+
+                        {whyNotIndex === index && (
+                          <p className="mt-3 rounded-xl bg-white p-3 text-sm leading-6 text-slate-600">
+                            {selectedTitle} was selected first because it had
+                            the strongest combined Pareto score right now:
+                            category priority, impact, confidence, timing, and
+                            effort. {alt.title} is still a strong backup option
+                            for later today.
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </motion.div>
 
-            <WeeklyParetoCard />
+            <WeeklyParetoCard category={selectedCategory} />
           </>
         )}
 
-        {/* <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35 }}
-          className="mt-8 text-base leading-relaxed text-slate-600"
-        >
-          {isLoading
-            ? "Loading your focus plan..."
-            : wakePlan
-              ? wakePlan.sentence
-              : "Connect your calendar to get started."}
-        </motion.p> */}
+        {isLoading && !wakePlan && (
+          <p className="mt-8 text-base leading-relaxed text-slate-600">
+            Loading your focus plan...
+          </p>
+        )}
 
         {wakePlan?.readOnlyCalendar && (
           <p className="mt-4 text-sm text-amber-700">
