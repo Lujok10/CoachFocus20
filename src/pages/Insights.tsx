@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Award, Clock, Share2, Target, Zap } from "lucide-react";
 import { ErrorState } from "../components/ErrorState";
-import { useAuth } from "@clerk/clerk-react";
 import {
   apiAutoRescheduleMissedWork,
   apiRecoverySuggestion,
@@ -38,7 +37,7 @@ function formatCategory(category: string) {
   return category.charAt(0).toUpperCase() + category.slice(1);
 }
 
-export function Insights() {
+export function Insights({ authReady }: { authReady: boolean }) {
   const [insights, setInsights] = useState<WeeklyInsights | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [copyStatus, setCopyStatus] = useState("");
@@ -69,16 +68,13 @@ export function Insights() {
   }
 }
 
-const { isLoaded, isSignedIn } = useAuth();
-
 useEffect(() => {
-  if (!isLoaded || !isSignedIn) return;
+  if (!authReady) return;
 
-  loadInsights();
-}, [isLoaded, isSignedIn]);
-
-  async function handleShare() {
-    if (!insights?.shareText) return;
+    loadInsights();
+  }, [authReady]);
+    async function handleShare() {
+      if (!insights?.shareText) return;
 
     try {
       await navigator.clipboard.writeText(insights.shareText);

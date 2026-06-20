@@ -243,7 +243,7 @@ if (error) {
         >
           {activeTab === "calendar" &&
             (authReady ? (
-              <Calendar />
+              <Calendar authReady={authReady} />
             ) : (
               <div className="flex min-h-screen items-center justify-center">
                 <p className="text-sm text-slate-500">Preparing calendar...</p>
@@ -252,7 +252,7 @@ if (error) {
 
           {activeTab === "insights" &&
             (authReady ? (
-              <Insights />
+              <Insights authReady={authReady} />
             ) : (
               <div className="flex min-h-screen items-center justify-center">
                 <p className="text-sm text-slate-500">Preparing insights...</p>

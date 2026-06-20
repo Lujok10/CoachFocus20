@@ -112,7 +112,7 @@ function overlaps(
   });
 }
 
-export function Calendar() {
+export function Calendar({ authReady }: { authReady: boolean }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<CalendarView>("week");
   const [events, setEvents] = useState<AppCalendarEvent[]>([]);
@@ -184,10 +184,10 @@ export function Calendar() {
  const { isLoaded, isSignedIn } = useAuth();
 
 useEffect(() => {
-  if (!isLoaded || !isSignedIn) return;
+      if (!authReady) return;
 
-  loadEvents();
-}, [isLoaded, isSignedIn]);
+      loadEvents();
+    }, [authReady, loadEvents, reloadIndex]);
 
   function goPrevious() {
     const next = new Date(currentDate);
