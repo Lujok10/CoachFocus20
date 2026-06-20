@@ -30,10 +30,14 @@ export async function request<T>(
   };
 
 if (token) {
-  console.log("API TOKEN FOUND");
   headers.Authorization = `Bearer ${token}`;
+
+  console.log("API TOKEN FOUND");
+  console.log("REQUEST PATH:", path);
+  console.log("AUTH HEADER SET:", !!headers.Authorization);
 } else {
   console.log("NO API TOKEN");
+  console.log("REQUEST PATH:", path);
 }
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
