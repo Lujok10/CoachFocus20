@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { enqueueOfflineJob } from "../services/offlineQueue";
+import { useAuth } from "@clerk/clerk-react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -180,13 +181,13 @@ export function Calendar() {
     }
   }, [visibleDays]);
 
-  useEffect(() => {
-    void loadEvents();
-  }, [loadEvents, reloadIndex]);
+ const { isLoaded, isSignedIn } = useAuth();
 
-  function retryCalendar() {
-    setReloadIndex((current) => current + 1);
-  }
+useEffect(() => {
+  if (!isLoaded || !isSignedIn) return;
+
+  loadEvents();
+}, [isLoaded, isSignedIn]);
 
   function goPrevious() {
     const next = new Date(currentDate);
@@ -533,7 +534,7 @@ async function handleApplyFlexShift(candidate: any) {
        <ErrorState
         title="Calendar could not load"
         message={calendarError}
-        onRetry={retryCalendar}
+        onRetry={loadEvents}
 
         />
       )}

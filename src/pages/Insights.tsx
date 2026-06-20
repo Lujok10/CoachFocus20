@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Award, Clock, Share2, Target, Zap } from "lucide-react";
 import { ErrorState } from "../components/ErrorState";
+import { useAuth } from "@clerk/clerk-react";
 import {
   apiAutoRescheduleMissedWork,
   apiRecoverySuggestion,
@@ -68,9 +69,13 @@ export function Insights() {
   }
 }
 
+const { isLoaded, isSignedIn } = useAuth();
+
 useEffect(() => {
+  if (!isLoaded || !isSignedIn) return;
+
   loadInsights();
-}, []);
+}, [isLoaded, isSignedIn]);
 
   async function handleShare() {
     if (!insights?.shareText) return;
