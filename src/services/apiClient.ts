@@ -13,8 +13,10 @@ export async function request<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
+  
   let token: string | null = null;
 
+for (let attempt = 0; attempt < 10; attempt++) {
   try {
     if (clerkTokenProvider) {
       token = await clerkTokenProvider();
@@ -22,6 +24,11 @@ export async function request<T>(
   } catch {
     token = null;
   }
+
+  if (token) break;
+
+  await new Promise((resolve) => setTimeout(resolve, 150));
+}
 
   const isFormData = options.body instanceof FormData;
 
