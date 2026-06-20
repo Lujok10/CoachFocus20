@@ -31,25 +31,35 @@ function calculateDailyScore(input: {
   confidence: number;
   paretoScore: number;
   category?: string;
+  protectedMinutes: number;
+  wins?: number;
 }) {
   const confidence =
     input.confidence > 1 ? input.confidence : input.confidence * 100;
 
-  const impactPoints = input.impact * 5;
-  const confidencePoints = confidence * 0.25;
-  const paretoPoints = clampNumber(input.paretoScore * 18, 0, 25);
+  const impactPoints = input.impact * 4;
+  const confidencePoints = confidence * 0.2;
+  const paretoPoints = clampNumber(input.paretoScore * 15, 0, 20);
+  const protectedPoints = clampNumber(input.protectedMinutes / 3, 0, 15);
+  const winPoints = clampNumber((input.wins ?? 0) * 10, 0, 20);
+
   const categoryPoints =
     input.category === "income"
-      ? 10
+      ? 8
       : input.category === "learning"
-        ? 8
+        ? 7
         : input.category === "health"
           ? 6
-          : 5;
+          : 4;
 
   return Math.round(
     clampNumber(
-      impactPoints + confidencePoints + paretoPoints + categoryPoints,
+      impactPoints +
+        confidencePoints +
+        paretoPoints +
+        protectedPoints +
+        winPoints +
+        categoryPoints,
       0,
       100
     )
@@ -200,57 +210,62 @@ export function WakeScreen({
   const [whyNotIndex, setWhyNotIndex] = useState<number | null>(null);
 
   const statusLabel = wakePlan?.calendarReconnectRequired
-    ? "Reconnect calendar"
-    : wakePlan?.readOnlyCalendar
-      ? "Read-only calendar"
-      : wakePlan?.isReserved
-        ? "Block reserved"
-        : "Suggested time";
+  ? "Reconnect calendar"
+  : wakePlan?.readOnlyCalendar
+    ? "Read-only calendar"
+    : wakePlan?.isReserved
+      ? "Block reserved"
+      : "Suggested time";
 
-  const confidenceDisplay =
-    wakePlan?.confidence && wakePlan.confidence > 1
-      ? Math.round(wakePlan.confidence)
-      : Math.round((wakePlan?.confidence ?? 0.82) * 100);
+const confidenceDisplay =
+  wakePlan?.confidence && wakePlan.confidence > 1
+    ? Math.round(wakePlan.confidence)
+    : Math.round((wakePlan?.confidence ?? 0.82) * 100);
 
-  const impactValue =
-    wakePlan?.impact ??
-    wakePlan?.lever?.predictedImpact ??
-    wakePlan?.block?.predictedImpact ??
-    5;
+const impactValue =
+  wakePlan?.impact ??
+  wakePlan?.lever?.predictedImpact ??
+  wakePlan?.block?.predictedImpact ??
+  5;
 
-  const impactLabel =
-    impactValue >= 8 ? "High" : impactValue >= 5 ? "Medium" : "Low";
+const impactLabel =
+  impactValue >= 8 ? "High" : impactValue >= 5 ? "Medium" : "Low";
 
-  const effortMinutes =
-    wakePlan?.effortMinutes ?? wakePlan?.block?.durationMinutes ?? 60;
+const effortMinutes =
+  wakePlan?.effortMinutes ?? wakePlan?.block?.durationMinutes ?? 60;
 
-  const paretoScoreNumber = wakePlan?.paretoScore ?? 0;
-  const paretoScore = paretoScoreNumber.toFixed(2);
+const paretoScoreNumber = wakePlan?.paretoScore ?? 0;
+const paretoScore = paretoScoreNumber.toFixed(2);
 
-  const selectedTitle =
-    wakePlan?.leverName ?? wakePlan?.lever?.title ?? wakePlan?.block?.title;
+const selectedTitle =
+  wakePlan?.leverName ?? wakePlan?.lever?.title ?? wakePlan?.block?.title;
 
-  const selectedCategory =
-    wakePlan?.lever?.category ?? wakePlan?.block?.leverCategory;
+const selectedCategory =
+  wakePlan?.lever?.category ?? wakePlan?.block?.leverCategory;
 
-  const dailyScore = wakePlan
-    ? calculateDailyScore({
-        impact: impactValue,
-        confidence: confidenceDisplay,
-        paretoScore: paretoScoreNumber,
-        category: selectedCategory,
-      })
-    : 0;
+const weeklyProtectedMinutes =
+  wakePlan?.weeklyProtectedMinutes ?? effortMinutes;
 
-  const weeklyParetoShare = wakePlan?.weeklyNeedleMoverWins
-    ? clampNumber(wakePlan.weeklyNeedleMoverWins * 10, 10, 40)
-    : clampNumber(Math.round(paretoScoreNumber * 17), 10, 35);
+const weeklyWins =
+  wakePlan?.paretoWins ?? Math.max(0, Math.round(paretoScoreNumber));
 
-  const weeklyProtectedMinutes =
-    wakePlan?.weeklyProtectedMinutes ?? effortMinutes;
+const dailyScore = wakePlan
+  ? calculateDailyScore({
+      impact: impactValue,
+      confidence: confidenceDisplay,
+      paretoScore: paretoScoreNumber,
+      category: selectedCategory,
+      protectedMinutes: weeklyProtectedMinutes,
+      wins: weeklyWins,
+    })
+  : 0;
 
-  const weeklyWins =
-    wakePlan?.paretoWins ?? Math.max(1, Math.round(paretoScoreNumber));
+const weeklyParetoShare = clampNumber(
+  Math.round((paretoScoreNumber / 2) * 100),
+  20,
+  80
+);
+ 
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-slate-50 px-5">
