@@ -73,13 +73,14 @@ export default function App() {
     }, [authReady]);
 
   const {
-      wakePlan,
-      isLoading,
-      error,
-      undoAction,
-      selectAlternative,
-      updateStatus,
-    } = useWakePlan(authReady);
+  wakePlan,
+  isLoading,
+  error,
+  undoAction,
+  selectAlternative,
+  updateStatus,
+  refreshPlan,
+} = useWakePlan(authReady);
 
 const loadingTimedOut = useLoadingTimeout(isLoading);
 
