@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import {
   CalendarPlus,
@@ -22,12 +22,46 @@ interface WakeScreenProps {
   onVoiceCheckIn: () => void;
 }
 
+function clampNumber(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function calculateDailyScore(input: {
+  impact: number;
+  confidence: number;
+  paretoScore: number;
+  category?: string;
+}) {
+  const confidence =
+    input.confidence > 1 ? input.confidence : input.confidence * 100;
+
+  const impactPoints = input.impact * 5;
+  const confidencePoints = confidence * 0.25;
+  const paretoPoints = clampNumber(input.paretoScore * 18, 0, 25);
+  const categoryPoints =
+    input.category === "income"
+      ? 10
+      : input.category === "learning"
+        ? 8
+        : input.category === "health"
+          ? 6
+          : 5;
+
+  return Math.round(
+    clampNumber(
+      impactPoints + confidencePoints + paretoPoints + categoryPoints,
+      0,
+      100
+    )
+  );
+}
+
 function MetricPill({
   variant,
   children,
 }: {
   variant: "impact" | "effort" | "confidence" | "pareto";
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const classes = {
     impact: "bg-emerald-100 text-emerald-700",
@@ -54,7 +88,48 @@ function categoryIcon(category?: string) {
   return "⚡";
 }
 
-function WeeklyParetoCard({ category }: { category?: string }) {
+function DailyScoreCard({ score }: { score: number }) {
+  return (
+    <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-bold uppercase tracking-wide text-slate-500">
+            Focus20 Daily Score
+          </p>
+          <p className="mt-1 text-3xl font-black text-slate-900">
+            {score}/100
+          </p>
+        </div>
+
+        <div className="rounded-full bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700">
+          {score >= 80 ? "Excellent" : score >= 65 ? "Strong" : "Building"}
+        </div>
+      </div>
+
+      <div className="mt-4 h-3 rounded-full bg-slate-100">
+        <div
+          className="h-3 rounded-full bg-emerald-500"
+          style={{ width: `${score}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function WeeklyParetoCard({
+  category,
+  paretoShare,
+  protectedMinutes,
+  wins,
+}: {
+  category?: string;
+  paretoShare: number;
+  protectedMinutes: number;
+  wins: number;
+}) {
+  const safeShare = clampNumber(Math.round(paretoShare), 5, 45);
+  const degrees = safeShare * 3.6;
+
   return (
     <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between gap-3">
@@ -64,7 +139,7 @@ function WeeklyParetoCard({ category }: { category?: string }) {
 
         <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
           <Trophy className="h-3.5 w-3.5" />
-          Pareto Win
+          {wins} wins
         </div>
       </div>
 
@@ -73,27 +148,28 @@ function WeeklyParetoCard({ category }: { category?: string }) {
           <div
             className="absolute inset-0 rounded-full"
             style={{
-              background:
-                "conic-gradient(rgb(16 185 129) 0deg 72deg, rgb(226 232 240) 72deg 360deg)",
+              background: `conic-gradient(rgb(16 185 129) 0deg ${degrees}deg, rgb(226 232 240) ${degrees}deg 360deg)`,
             }}
           />
+
           <div className="absolute inset-12 rounded-full bg-white" />
+
           <div className="absolute inset-0 flex items-center justify-center text-xl font-black text-slate-700">
-            20%
+            {safeShare}%
           </div>
         </div>
 
         <div className="space-y-4 text-sm font-semibold">
           <div className="flex items-center gap-3 text-emerald-600">
             <span className="h-3 w-3 rounded-full bg-emerald-500" />
-            Best Pareto 20%
+            Best Pareto {safeShare}%
           </div>
 
           <div className="h-px w-36 bg-slate-200" />
 
           <div className="flex items-center gap-3 text-slate-600">
             <span className="h-3 w-3 rounded-full bg-slate-300" />
-            Other 80%
+            Other {100 - safeShare}%
           </div>
 
           <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">
@@ -101,6 +177,11 @@ function WeeklyParetoCard({ category }: { category?: string }) {
             <span className="font-black">
               {categoryIcon(category)} {category ?? "focus"}
             </span>
+          </div>
+
+          <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">
+            Protected:{" "}
+            <span className="font-black">{protectedMinutes} min</span>
           </div>
         </div>
       </div>
@@ -143,7 +224,8 @@ export function WakeScreen({
   const effortMinutes =
     wakePlan?.effortMinutes ?? wakePlan?.block?.durationMinutes ?? 60;
 
-  const paretoScore = (wakePlan?.paretoScore ?? 0).toFixed(2);
+  const paretoScoreNumber = wakePlan?.paretoScore ?? 0;
+  const paretoScore = paretoScoreNumber.toFixed(2);
 
   const selectedTitle =
     wakePlan?.leverName ?? wakePlan?.lever?.title ?? wakePlan?.block?.title;
@@ -151,8 +233,24 @@ export function WakeScreen({
   const selectedCategory =
     wakePlan?.lever?.category ?? wakePlan?.block?.leverCategory;
 
-  const selectedAlternative =
-    whyNotIndex !== null ? wakePlan?.alternatives?.[whyNotIndex] : null;
+  const dailyScore = wakePlan
+    ? calculateDailyScore({
+        impact: impactValue,
+        confidence: confidenceDisplay,
+        paretoScore: paretoScoreNumber,
+        category: selectedCategory,
+      })
+    : 0;
+
+  const weeklyParetoShare = wakePlan?.weeklyNeedleMoverWins
+    ? clampNumber(wakePlan.weeklyNeedleMoverWins * 10, 10, 40)
+    : clampNumber(Math.round(paretoScoreNumber * 17), 10, 35);
+
+  const weeklyProtectedMinutes =
+    wakePlan?.weeklyProtectedMinutes ?? effortMinutes;
+
+  const weeklyWins =
+    wakePlan?.paretoWins ?? Math.max(1, Math.round(paretoScoreNumber));
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-slate-50 px-5">
@@ -210,7 +308,7 @@ export function WakeScreen({
                   Why this was selected
                 </p>
 
-                <p className="mt-3 text-lg leading-9 text-slate-600 break-words">
+                <p className="mt-3 break-words text-lg leading-9 text-slate-600">
                   {wakePlan.recommendationReason ??
                     wakePlan.why ??
                     "This is your highest-leverage move right now because it fits your available focus window and supports your most important lever."}
@@ -239,6 +337,7 @@ export function WakeScreen({
                 <div className="mt-6 rounded-[24px] border border-slate-200 bg-white p-4">
                   <div className="flex items-center gap-2">
                     <Sparkles className="h-4 w-4 text-emerald-500" />
+
                     <p className="text-sm font-black uppercase tracking-wide text-slate-500">
                       Other strong options today
                     </p>
@@ -255,8 +354,10 @@ export function WakeScreen({
                             <p className="font-bold text-slate-900">
                               {categoryIcon(alt.category)} {alt.title}
                             </p>
+
                             <p className="mt-1 text-sm text-slate-500">
-                              {alt.category} • {alt.time}
+                              {categoryIcon(alt.category)} {alt.category} •{" "}
+                              {alt.time}
                             </p>
                           </div>
 
@@ -276,11 +377,8 @@ export function WakeScreen({
 
                         {whyNotIndex === index && (
                           <p className="mt-3 rounded-xl bg-white p-3 text-sm leading-6 text-slate-600">
-                            {selectedTitle} was selected first because it had
-                            the strongest combined Pareto score right now:
-                            category priority, impact, confidence, timing, and
-                            effort. {alt.title} is still a strong backup option
-                            for later today.
+                            {alt.whyNotReason ??
+                              `${selectedTitle} was selected first because it had the strongest combined Pareto score right now: category priority, impact, confidence, timing, and effort. ${alt.title} is still a strong backup option for later today.`}
                           </p>
                         )}
                       </div>
@@ -290,7 +388,14 @@ export function WakeScreen({
               )}
             </motion.div>
 
-            <WeeklyParetoCard category={selectedCategory} />
+            <DailyScoreCard score={dailyScore} />
+
+            <WeeklyParetoCard
+              category={wakePlan.weeklyTopLever ?? selectedCategory}
+              paretoShare={weeklyParetoShare}
+              protectedMinutes={weeklyProtectedMinutes}
+              wins={weeklyWins}
+            />
           </>
         )}
 
