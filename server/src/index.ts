@@ -117,18 +117,7 @@ app.use(
 
 app.options("/{*splat}", cors());
 
-// app.use(
-//   clerkMiddleware({
-//     secretKey: process.env.CLERK_SECRET_KEY,
-//     publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
-//     audience: "focus20-api",
-//   })
-// );
-app.use(
-  clerkMiddleware({
-    audience: "focus20-api",
-  })
-);
+app.use(clerkMiddleware());
 
 app.use(
   "/api",
