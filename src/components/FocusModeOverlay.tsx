@@ -238,153 +238,172 @@ export function FocusModeOverlay({
           "Capture the next action before stopping.",
         ];
 
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/95 p-6"
+  const sessionGoal =
+  localStorage.getItem("focus20_current_goal") ??
+  wakePlan.block.title;      
+
+ return (
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/95 p-6"
+  >
+    <button
+      onClick={onClose}
+      className="fixed right-6 top-6 z-10 p-2 text-slate-400 transition-colors hover:text-white"
     >
-      <button
-        onClick={onClose}
-        className="fixed right-6 top-6 z-10 p-2 text-slate-400 transition-colors hover:text-white"
+      <X className="h-6 w-6" />
+    </button>
+
+    <div className="mx-auto flex min-h-full max-w-md flex-col items-center justify-center py-10 text-center">
+      <motion.h2
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-2 text-xl font-semibold text-white"
       >
-        <X className="h-6 w-6" />
-      </button>
+        {isComplete ? "Session Complete!" : "Focus Mode"}
+      </motion.h2>
 
-      <div className="mx-auto flex min-h-full max-w-md flex-col items-center justify-center py-10 text-center">
-        <motion.h2
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-2 text-xl font-semibold text-white"
-        >
-          {isComplete ? "Session Complete!" : "Focus Mode"}
-        </motion.h2>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.1 }}
+        className="mb-6 w-full rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4"
+      >
+        <p className="text-xs font-bold uppercase tracking-wide text-emerald-300">
+          Today&apos;s Target
+        </p>
 
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.1 }}
-          className="mb-8 text-slate-400"
-        >
-          {wakePlan.lever?.title ?? wakePlan.block.title}
-        </motion.p>
+        <p className="mt-2 text-lg font-bold text-white">{sessionGoal}</p>
+      </motion.div>
 
-        <div className="relative mx-auto mb-8 h-64 w-64">
-          <svg className="h-full w-full -rotate-90 transform">
-            <circle
-              cx="128"
-              cy="128"
-              r="120"
-              stroke="currentColor"
-              strokeWidth="8"
-              fill="none"
-              className="text-slate-700"
-            />
+      <div className="relative mx-auto mb-6 h-64 w-64">
+        <svg className="h-full w-full -rotate-90 transform">
+          <circle
+            cx="128"
+            cy="128"
+            r="120"
+            stroke="currentColor"
+            strokeWidth="8"
+            fill="none"
+            className="text-slate-700"
+          />
 
-            <motion.circle
-              cx="128"
-              cy="128"
-              r="120"
-              stroke="currentColor"
-              strokeWidth="8"
-              fill="none"
-              strokeLinecap="round"
-              className={isComplete ? "text-emerald-500" : "text-emerald-400"}
-              style={{
-                strokeDasharray: 2 * Math.PI * 120,
-                strokeDashoffset:
-                  2 * Math.PI * 120 * (1 - progress / 100),
-              }}
-            />
-          </svg>
+          <motion.circle
+            cx="128"
+            cy="128"
+            r="120"
+            stroke="currentColor"
+            strokeWidth="8"
+            fill="none"
+            strokeLinecap="round"
+            className={isComplete ? "text-emerald-500" : "text-emerald-400"}
+            style={{
+              strokeDasharray: 2 * Math.PI * 120,
+              strokeDashoffset: 2 * Math.PI * 120 * (1 - progress / 100),
+            }}
+          />
+        </svg>
 
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="font-mono text-5xl font-bold text-white">
-              {formatTime(secondsLeft)}
-            </span>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="font-mono text-5xl font-bold text-white">
+            {formatTime(secondsLeft)}
+          </span>
 
-            {isComplete && (
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="mt-2"
-              >
-                <Check className="h-8 w-8 text-emerald-400" />
-              </motion.div>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center justify-center gap-4">
-          {!isComplete && (
-            <button
-              onClick={toggleRunning}
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-900 transition-colors hover:bg-slate-100"
-            >
-              {isRunning ? (
-                <Pause className="h-6 w-6" />
-              ) : (
-                <Play className="ml-1 h-6 w-6" fill="currentColor" />
-              )}
-            </button>
-          )}
+          <p className="mt-2 text-xs uppercase tracking-wide text-slate-500">
+            Time Remaining
+          </p>
 
           {isComplete && (
-            <motion.button
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              onClick={handleComplete}
-              disabled={isSavingCompletion}
-              className="flex items-center gap-2 rounded-full bg-emerald-500 px-6 py-3 font-medium text-white transition-colors hover:bg-emerald-600 disabled:opacity-60"
-            >
-              <Check className="h-5 w-5" />
-              {isSavingCompletion ? "Saving..." : "Done"}
-            </motion.button>
+            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="mt-2">
+              <Check className="h-8 w-8 text-emerald-400" />
+            </motion.div>
           )}
         </div>
+      </div>
 
-        {isComplete ? (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
+      {!isComplete && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2 }}
+          className="mb-6 w-full rounded-2xl bg-slate-800 p-4 text-left"
+        >
+          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-400">
+            Success Criteria
+          </p>
+
+          <div className="space-y-3">
+            {plan.map((step, index) => (
+              <div key={index} className="flex items-start gap-3 text-slate-200">
+                <div className="mt-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-xs font-bold text-white">
+                  ✓
+                </div>
+
+                <span>{step}</span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
+      {!isComplete && (
+        <div className="mb-6 w-full rounded-xl bg-slate-800 px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-slate-500">
+            Focus20 Reward
+          </p>
+
+          <p className="mt-1 font-bold text-emerald-400">
+            +{Math.max(1, Math.floor(progress / 10))} score potential
+          </p>
+        </div>
+      )}
+
+      <div className="flex items-center justify-center gap-4">
+        {!isComplete && (
+          <button
+            onClick={toggleRunning}
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-900 transition-colors hover:bg-slate-100"
+          >
+            {isRunning ? (
+              <Pause className="h-6 w-6" />
+            ) : (
+              <Play className="ml-1 h-6 w-6" fill="currentColor" />
+            )}
+          </button>
+        )}
+
+        {isComplete && (
+          <motion.button
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mt-8 w-full"
+            onClick={handleComplete}
+            disabled={isSavingCompletion}
+            className="flex items-center gap-2 rounded-full bg-emerald-500 px-6 py-3 font-medium text-white transition-colors hover:bg-emerald-600 disabled:opacity-60"
           >
-            <VoiceCheckinRecorder
-              focusBlockId={wakePlan.block.id}
-              onComplete={async () => {
-                await saveCompletion();
-                onComplete();
-              }}
-            />
-          </motion.div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
-            className="mt-8 w-full text-left"
-          >
-            <p className="mb-3 text-xs font-medium uppercase tracking-wider text-slate-500">
-              Your plan
-            </p>
-
-            <ul className="space-y-2">
-              {plan.map((step, index) => (
-                <li
-                  key={index}
-                  className="flex items-start gap-2 text-sm text-slate-300"
-                >
-                  <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs font-medium text-slate-400">
-                    {index + 1}
-                  </span>
-                  {step}
-                </li>
-              ))}
-            </ul>
-          </motion.div>
+            <Check className="h-5 w-5" />
+            {isSavingCompletion ? "Saving..." : "Done"}
+          </motion.button>
         )}
       </div>
-    </motion.div>
-  );
+
+      {isComplete && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-8 w-full"
+        >
+          <VoiceCheckinRecorder
+            focusBlockId={wakePlan.block.id}
+            onComplete={async () => {
+              await saveCompletion();
+              onComplete();
+            }}
+          />
+        </motion.div>
+      )}
+    </div>
+  </motion.div>
+);
 }

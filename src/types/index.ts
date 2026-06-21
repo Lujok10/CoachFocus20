@@ -75,6 +75,14 @@ export interface WakePlan {
     durationMinutes: number;
     reason: string;
   };
+
+  coachInsight?: {
+  category: LeverCategory;
+  completedCategoryBlocks: number;
+  completionRate: number;
+  comparisonCategory?: LeverCategory;
+  message: string;
+};
 }
 
 export interface Lever {

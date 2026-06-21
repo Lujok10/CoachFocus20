@@ -33,51 +33,46 @@ function calculateDailyScore(input: {
   category?: string;
   protectedMinutes: number;
   wins?: number;
+  streakDays?: number;
 }) {
   const confidence =
-    input.confidence > 1
-      ? input.confidence
-      : input.confidence * 100;
+    input.confidence > 1 ? input.confidence : input.confidence * 100;
 
-  let score = 0;
+  const wins = input.wins ?? 0;
+  const streakDays = input.streakDays ?? 0;
 
-  // Impact (0–50)
-  score += input.impact * 5;
+  let score = 25;
 
-  // Confidence (0–30)
-  score += confidence * 0.3;
+  // Actual execution should matter most.
+  score += Math.min(25, wins * 12);
 
-  // Pareto quality (0–20)
-  score += input.paretoScore * 12;
+  // Streak should help, but not dominate.
+  score += Math.min(15, streakDays * 5);
 
-  // Weekly wins (0–15)
-  score += Math.min(
-    15,
-    (input.wins ?? 0) * 2
-  );
+  // Protected time should help gradually.
+  score += Math.min(15, input.protectedMinutes / 20);
 
-  // Protected focus time (0–15)
-  score += Math.min(
-    15,
-    input.protectedMinutes / 60
-  );
+  // Recommendation quality should help, but should not create a fake high score.
+  score += Math.min(15, input.paretoScore * 10);
 
-  // Category weighting
+  // Confidence should add a small amount only.
+  score += Math.min(10, confidence * 0.1);
+
+  // Impact should add a small amount only.
+  score += Math.min(10, input.impact);
+
+  // Category bonus should be tiny.
   if (input.category === "income") {
-    score += 8;
-  } else if (input.category === "learning") {
-    score += 7;
-  } else if (input.category === "health") {
-    score += 5;
-  } else {
     score += 3;
+  } else if (input.category === "learning") {
+    score += 2;
+  } else if (input.category === "health") {
+    score += 2;
+  } else {
+    score += 1;
   }
 
-  return clampNumber(
-    Math.round(score),
-    0,
-    100
-  );
+  return clampNumber(Math.round(score), 0, 100);
 }
 
 function MetricPill({
@@ -85,7 +80,7 @@ function MetricPill({
   children,
 }: {
   variant: "impact" | "effort" | "confidence" | "pareto";
-  children: ReactNode;
+  children: React.ReactNode;
 }) {
   const classes = {
     impact: "bg-emerald-100 text-emerald-700",
@@ -135,6 +130,47 @@ function DailyScoreCard({ score }: { score: number }) {
           className="h-3 rounded-full bg-emerald-500"
           style={{ width: `${score}%` }}
         />
+      </div>
+    </div>
+  );
+}
+
+function CoachInsightCard({
+  message,
+}: {
+  message?: string;
+}) {
+  if (!message) return null;
+
+  return (
+    <div className="mt-3 w-full rounded-[28px] border border-emerald-100 bg-emerald-50 p-5 text-left shadow-sm">
+      <p className="text-sm font-black uppercase tracking-wide text-emerald-700">
+        Coach Insight
+      </p>
+
+      <p className="mt-3 text-base leading-7 text-slate-700">
+        {message}
+      </p>
+    </div>
+  );
+}
+function NeedleMoverCard({ wins }: { wins: number }) {
+  return (
+    <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-bold uppercase tracking-wide text-slate-500">
+            Needle Movers
+          </p>
+
+          <p className="mt-1 text-3xl font-black text-slate-900">
+            {wins} this week
+          </p>
+        </div>
+
+        <div className="rounded-full bg-amber-50 px-4 py-2 text-sm font-black text-amber-700">
+          🎯 High value
+        </div>
       </div>
     </div>
   );
@@ -226,7 +262,7 @@ function WeeklyParetoCard({
     <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-lg font-bold text-slate-900">
-          This Week&apos;s Best Pareto 20%
+          Weekly High-Leverage Focus
         </h2>
 
         <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
@@ -254,14 +290,14 @@ function WeeklyParetoCard({
         <div className="space-y-4 text-sm font-semibold">
           <div className="flex items-center gap-3 text-emerald-600">
             <span className="h-3 w-3 rounded-full bg-emerald-500" />
-            Best Pareto {safeShare}%
+            High-Leverage Work {safeShare}%
           </div>
 
           <div className="h-px w-36 bg-slate-200" />
 
           <div className="flex items-center gap-3 text-slate-600">
             <span className="h-3 w-3 rounded-full bg-slate-300" />
-            Other {100 - safeShare}%
+            Everything Else {100 - safeShare}%
           </div>
 
           <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">
@@ -331,6 +367,8 @@ const weeklyProtectedMinutes =
 const weeklyWins =
   wakePlan?.paretoWins ?? Math.max(0, Math.round(paretoScoreNumber));
 
+const needleMoverWins = wakePlan?.weeklyNeedleMoverWins ?? 0; 
+
 const dailyScore = wakePlan
   ? calculateDailyScore({
       impact: impactValue,
@@ -339,6 +377,7 @@ const dailyScore = wakePlan
       category: selectedCategory,
       protectedMinutes: weeklyProtectedMinutes,
       wins: weeklyWins,
+      streakDays: wakePlan.streakDays ?? 0,
     })
   : 0;
 
@@ -438,7 +477,7 @@ const focusRoi =
                     "This is your highest-leverage move right now because it fits your available focus window and supports your most important lever."}
                 </p>
               </div>
-
+            <CoachInsightCard message={wakePlan.coachInsight?.message} />
               <div className="mt-6 grid grid-cols-2 gap-4">
                 <MetricPill variant="impact">
                   Impact: {impactLabel} ({impactValue})
@@ -457,8 +496,22 @@ const focusRoi =
                 </MetricPill>
               </div>
 
-              {wakePlan.alternatives?.length > 0 && (
-                <div className="mt-6 rounded-[24px] border border-slate-200 bg-white p-4">
+             
+            </motion.div>
+
+            <DailyScoreCard score={dailyScore} />
+            <NeedleMoverCard wins={needleMoverWins} />
+
+            <PerformanceSummaryCard
+              streakDays={streakDays}
+              weeklyGoalCompleted={weeklyGoalCompleted}
+              weeklyGoalTarget={weeklyGoalTarget}
+              weeklyGoalPercent={weeklyGoalPercent}
+              momentum={momentum}
+              focusRoi={focusRoi}
+            />
+               {wakePlan.alternatives?.length > 0 && (
+                <div className="mt-3 w-full rounded-[24px] border border-slate-200 bg-white p-4 text-left shadow-sm">
                   <div className="flex items-center gap-2">
                     <Sparkles className="h-4 w-4 text-emerald-500" />
 
@@ -510,19 +563,6 @@ const focusRoi =
                   </div>
                 </div>
               )}
-            </motion.div>
-
-            <DailyScoreCard score={dailyScore} />
-
-            <PerformanceSummaryCard
-              streakDays={streakDays}
-              weeklyGoalCompleted={weeklyGoalCompleted}
-              weeklyGoalTarget={weeklyGoalTarget}
-              weeklyGoalPercent={weeklyGoalPercent}
-              momentum={momentum}
-              focusRoi={focusRoi}
-            />
-
             <WeeklyParetoCard
               category={wakePlan.weeklyTopLever ?? selectedCategory}
               paretoShare={weeklyParetoShare}

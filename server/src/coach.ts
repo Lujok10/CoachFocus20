@@ -70,7 +70,9 @@ function hhmm(date: Date) {
     hour12: false,
   });
 }
-
+function capitalizeFirst(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
 function addMinutes(date: Date, minutes: number) {
   return new Date(date.getTime() + minutes * 60_000);
 }
@@ -565,23 +567,57 @@ export async function refreshWakePlan(userId: string, force = false) {
     cursor.setDate(cursor.getDate() - 1);
   }
 
-  const wakePlan = buildWakePlan({
-    block,
-    actionId: action.id,
-    planner,
-    reservationStatus,
-    isReserved,
-    calendarReconnectRequired: !rules.calendarConnected,
-    readOnlyCalendar: rules.calendarPermission === "read-only",
-  });
+  const selectedCategory = planner.leverCategory as LeverCategory;
 
-  return {
-    ...wakePlan,
-    weeklyProtectedMinutes,
-    paretoWins,
-    weeklyNeedleMoverWins,
-    streakDays,
-  };
+const categoryBlocks = weeklyBlocks.filter(
+  (item) => item.leverCategory === selectedCategory
+);
+
+const completedCategoryBlocks = categoryBlocks.filter(
+  (item) => item.status === "completed"
+).length;
+
+const completionRate =
+  categoryBlocks.length === 0
+    ? 0
+    : Math.round((completedCategoryBlocks / categoryBlocks.length) * 100);
+
+const comparisonCategory =
+  selectedCategory === "income" ? "learning" : "income";
+
+const coachInsightMessage =
+  completedCategoryBlocks > 0
+    ? `You have completed ${completedCategoryBlocks} ${selectedCategory}-related focus block${
+        completedCategoryBlocks === 1 ? "" : "s"
+      } over the last 7 days. ${capitalizeFirst(
+        selectedCategory
+      )} tasks have generated a ${completionRate}% completion rate. Continuing this momentum is likely to produce more results than switching to ${comparisonCategory} tasks today.`
+    : `You have not completed a ${selectedCategory}-related focus block yet this week. This is a good opportunity to build momentum and teach Focus20 what work creates the best results for you.`;
+
+const wakePlan = buildWakePlan({
+  block,
+  actionId: action.id,
+  planner,
+  reservationStatus,
+  isReserved,
+  calendarReconnectRequired: !rules.calendarConnected,
+  readOnlyCalendar: rules.calendarPermission === "read-only",
+});
+
+return {
+  ...wakePlan,
+  weeklyProtectedMinutes,
+  paretoWins,
+  weeklyNeedleMoverWins,
+  streakDays,
+  coachInsight: {
+    category: selectedCategory,
+    completedCategoryBlocks,
+    completionRate,
+    comparisonCategory,
+    message: coachInsightMessage,
+  },
+};
 }
 
 export async function listCalendarEvents(
