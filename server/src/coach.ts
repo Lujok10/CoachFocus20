@@ -533,6 +533,36 @@ export async function refreshWakePlan(userId: string, force = false) {
     0
   );
 
+  const weeklyHighLeverageMinutes = weeklyBlocks.reduce(
+  (total, item) => {
+    if (item.status !== "completed") return total;
+    if (item.predictedImpact < 8) return total;
+
+    return (
+      total +
+      Math.round((item.endIso.getTime() - item.startIso.getTime()) / 60000)
+    );
+  },
+  0
+);
+
+const weeklyTotalFocusMinutes = weeklyBlocks.reduce(
+  (total, item) => {
+    if (item.status !== "completed") return total;
+
+    return (
+      total +
+      Math.round((item.endIso.getTime() - item.startIso.getTime()) / 60000)
+    );
+  },
+  0
+);
+
+const realWeeklyParetoShare =
+  weeklyTotalFocusMinutes === 0
+    ? 0
+    : Math.round((weeklyHighLeverageMinutes / weeklyTotalFocusMinutes) * 100);
+
   const paretoWins = weeklyBlocks.filter(
     (item) => item.status === "completed" && item.predictedImpact >= 8
   ).length;
@@ -585,15 +615,16 @@ const completionRate =
 const comparisonCategory =
   selectedCategory === "income" ? "learning" : "income";
 
+const nextRecommendation = planner.leverTitle;
+
 const coachInsightMessage =
   completedCategoryBlocks > 0
-    ? `You have completed ${completedCategoryBlocks} ${selectedCategory}-related focus block${
-        completedCategoryBlocks === 1 ? "" : "s"
-      } over the last 7 days. ${capitalizeFirst(
+    ? `${capitalizeFirst(
         selectedCategory
-      )} tasks have generated a ${completionRate}% completion rate. Continuing this momentum is likely to produce more results than switching to ${comparisonCategory} tasks today.`
-    : `You have not completed a ${selectedCategory}-related focus block yet this week. This is a good opportunity to build momentum and teach Focus20 what work creates the best results for you.`;
-
+      )} tasks have a ${completionRate}% completion rate this week. You have completed ${completedCategoryBlocks} ${selectedCategory}-related focus block${
+        completedCategoryBlocks === 1 ? "" : "s"
+      } over the last 7 days. Completing one more ${selectedCategory} block would strengthen your momentum. Recommended next: ${nextRecommendation}.`
+    : `You have not completed a ${selectedCategory}-related focus block yet this week. This is a good opportunity to build momentum. Recommended next: ${nextRecommendation}.`;
 const wakePlan = buildWakePlan({
   block,
   actionId: action.id,
@@ -604,12 +635,27 @@ const wakePlan = buildWakePlan({
   readOnlyCalendar: rules.calendarPermission === "read-only",
 });
 
+const xp =
+  paretoWins * 50 +
+  weeklyNeedleMoverWins * 40 +
+  streakDays * 25 +
+  Math.floor(weeklyProtectedMinutes / 10);
+
+const xpLevel = Math.max(1, Math.floor(xp / 500) + 1);
+const xpNextLevel = xpLevel * 500;
+
 return {
   ...wakePlan,
   weeklyProtectedMinutes,
   paretoWins,
   weeklyNeedleMoverWins,
   streakDays,
+  weeklyHighLeverageMinutes,
+  weeklyTotalFocusMinutes,
+  weeklyParetoShare: realWeeklyParetoShare,
+  xp,
+  xpLevel,
+  xpNextLevel,
   coachInsight: {
     category: selectedCategory,
     completedCategoryBlocks,
@@ -617,6 +663,7 @@ return {
     comparisonCategory,
     message: coachInsightMessage,
   },
+
 };
 }
 

@@ -176,6 +176,47 @@ function NeedleMoverCard({ wins }: { wins: number }) {
   );
 }
 
+function XpCard({
+  xp,
+  level,
+  nextLevel,
+}: {
+  xp: number;
+  level: number;
+  nextLevel: number;
+}) {
+  const progress = clampNumber(Math.round((xp / Math.max(nextLevel, 1)) * 100), 0, 100);
+
+  return (
+    <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-bold uppercase tracking-wide text-slate-500">
+            Focus20 XP
+          </p>
+          <p className="mt-1 text-3xl font-black text-slate-900">
+            Level {level}
+          </p>
+          <p className="mt-1 text-sm font-semibold text-slate-500">
+            {xp} / {nextLevel} XP
+          </p>
+        </div>
+
+        <div className="rounded-full bg-purple-50 px-4 py-2 text-sm font-black text-purple-700">
+          ⚡ Growing
+        </div>
+      </div>
+
+      <div className="mt-4 h-3 rounded-full bg-slate-100">
+        <div
+          className="h-3 rounded-full bg-purple-500"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function PerformanceSummaryCard({
   streakDays,
   weeklyGoalCompleted,
@@ -369,6 +410,10 @@ const weeklyWins =
 
 const needleMoverWins = wakePlan?.weeklyNeedleMoverWins ?? 0; 
 
+const xp = wakePlan?.xp ?? 0;
+const xpLevel = wakePlan?.xpLevel ?? 1;
+const xpNextLevel = wakePlan?.xpNextLevel ?? 500;
+
 const dailyScore = wakePlan
   ? calculateDailyScore({
       impact: impactValue,
@@ -382,9 +427,10 @@ const dailyScore = wakePlan
   : 0;
 
 const weeklyParetoShare = clampNumber(
-  Math.round((paretoScoreNumber / 2) * 100),
-  20,
-  80
+  wakePlan?.weeklyParetoShare ??
+    Math.round((paretoScoreNumber / 2) * 100),
+  0,
+  100
 );
 
 const streakDays = wakePlan?.streakDays ?? 0;
@@ -501,6 +547,7 @@ const focusRoi =
 
             <DailyScoreCard score={dailyScore} />
             <NeedleMoverCard wins={needleMoverWins} />
+            <XpCard xp={xp} level={xpLevel} nextLevel={xpNextLevel} />
 
             <PerformanceSummaryCard
               streakDays={streakDays}

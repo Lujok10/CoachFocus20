@@ -55,7 +55,7 @@ export interface WakePlan {
   recommendedStart?: string;
   recommendedEnd?: string;
   leverName?: string;
-
+  weeklyParetoShare?: number;
   // Analytics & Performance Metrics
   paretoWins?: number;
   weeklyTopLever?: LeverCategory;
@@ -70,12 +70,12 @@ export interface WakePlan {
   focusRoi?: "high" | "medium" | "low";
   ignoredTaskTitles?: string[];
 
-  nextAction?: {
-    title: string;
-    durationMinutes: number;
-    reason: string;
-  };
-
+  weeklyHighLeverageMinutes?: number;
+  weeklyTotalFocusMinutes?: number;
+  xp?: number;
+  xpLevel?: number;
+  xpNextLevel?: number;
+  coachRecommendation?: string;
   coachInsight?: {
   category: LeverCategory;
   completedCategoryBlocks: number;
@@ -83,6 +83,13 @@ export interface WakePlan {
   comparisonCategory?: LeverCategory;
   message: string;
 };
+  nextAction?: {
+    title: string;
+    durationMinutes: number;
+    reason: string;
+  };
+
+
 }
 
 export interface Lever {
