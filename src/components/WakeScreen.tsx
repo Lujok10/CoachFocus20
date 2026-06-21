@@ -140,6 +140,74 @@ function DailyScoreCard({ score }: { score: number }) {
   );
 }
 
+function PerformanceSummaryCard({
+  streakDays,
+  weeklyGoalCompleted,
+  weeklyGoalTarget,
+  weeklyGoalPercent,
+  momentum,
+  focusRoi,
+}: {
+  streakDays: number;
+  weeklyGoalCompleted: number;
+  weeklyGoalTarget: number;
+  weeklyGoalPercent: number;
+  momentum: "rising" | "stable" | "falling";
+  focusRoi: "high" | "medium" | "low";
+}) {
+  const momentumLabel =
+    momentum === "rising" ? "Rising ↑" : momentum === "falling" ? "Falling ↓" : "Stable →";
+
+  return (
+    <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-2xl bg-orange-50 p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-orange-600">
+            Current streak
+          </p>
+          <p className="mt-1 text-2xl font-black text-slate-900">
+            🔥 {streakDays} days
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-emerald-50 p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-emerald-600">
+            Momentum
+          </p>
+          <p className="mt-1 text-2xl font-black text-slate-900">
+            {momentumLabel}
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-blue-50 p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-blue-600">
+            Weekly goal
+          </p>
+          <p className="mt-1 text-xl font-black text-slate-900">
+            {weeklyGoalCompleted}/{weeklyGoalTarget} blocks
+          </p>
+
+          <div className="mt-3 h-2 rounded-full bg-white">
+            <div
+              className="h-2 rounded-full bg-blue-500"
+              style={{ width: `${weeklyGoalPercent}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-purple-50 p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-purple-600">
+            Focus ROI
+          </p>
+          <p className="mt-1 text-2xl font-black capitalize text-slate-900">
+            {focusRoi}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function WeeklyParetoCard({
   category,
   paretoShare,
@@ -279,6 +347,33 @@ const weeklyParetoShare = clampNumber(
   20,
   80
 );
+
+const streakDays = wakePlan?.streakDays ?? 0;
+
+const weeklyGoalTarget = wakePlan?.weeklyGoalTarget ?? 5;
+
+const weeklyGoalCompleted =
+  wakePlan?.weeklyGoalCompleted ?? weeklyWins;
+
+const weeklyGoalPercent =
+  wakePlan?.weeklyGoalPercent ??
+  clampNumber(
+    Math.round((weeklyGoalCompleted / Math.max(weeklyGoalTarget, 1)) * 100),
+    0,
+    100
+  );
+
+const momentum =
+  wakePlan?.momentum ??
+  (weeklyWins >= 3 ? "rising" : weeklyWins >= 1 ? "stable" : "falling");
+
+const focusRoi =
+  wakePlan?.focusRoi ??
+  (selectedCategory === "income" && weeklyWins >= 1
+    ? "high"
+    : weeklyProtectedMinutes >= 120
+      ? "medium"
+      : "low");
  
 
   return (
@@ -418,6 +513,15 @@ const weeklyParetoShare = clampNumber(
             </motion.div>
 
             <DailyScoreCard score={dailyScore} />
+
+            <PerformanceSummaryCard
+              streakDays={streakDays}
+              weeklyGoalCompleted={weeklyGoalCompleted}
+              weeklyGoalTarget={weeklyGoalTarget}
+              weeklyGoalPercent={weeklyGoalPercent}
+              momentum={momentum}
+              focusRoi={focusRoi}
+            />
 
             <WeeklyParetoCard
               category={wakePlan.weeklyTopLever ?? selectedCategory}

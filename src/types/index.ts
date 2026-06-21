@@ -63,6 +63,12 @@ export interface WakePlan {
   weeklyNeedleMoverWins?: number;
   dailyScore?: number;
   streakDays?: number;
+  weeklyGoalTarget?: number;
+  weeklyGoalCompleted?: number;
+  weeklyGoalPercent?: number;
+  momentum?: "rising" | "stable" | "falling";
+  focusRoi?: "high" | "medium" | "low";
+  ignoredTaskTitles?: string[];
 
   nextAction?: {
     title: string;
