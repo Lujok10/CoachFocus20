@@ -621,10 +621,10 @@ const coachInsightMessage =
   completedCategoryBlocks > 0
     ? `${capitalizeFirst(
         selectedCategory
-      )} tasks have a ${completionRate}% completion rate this week. You have completed ${completedCategoryBlocks} ${selectedCategory}-related focus block${
+      )} work has produced your highest completion trend this week. You completed ${completedCategoryBlocks} ${selectedCategory}-related focus block${
         completedCategoryBlocks === 1 ? "" : "s"
-      } over the last 7 days. Completing one more ${selectedCategory} block would strengthen your momentum. Recommended next: ${nextRecommendation}.`
-    : `You have not completed a ${selectedCategory}-related focus block yet this week. This is a good opportunity to build momentum. Recommended next: ${nextRecommendation}.`;
+      } over the last 7 days with a ${completionRate}% completion rate. Focus20 predicts continuing this category is more likely to generate measurable results than switching categories today.`
+    : `Focus20 does not yet have enough data for this category. Completing this block will help train future recommendations and establish a performance baseline.`;
 const wakePlan = buildWakePlan({
   block,
   actionId: action.id,
@@ -644,6 +644,19 @@ const xp =
 const xpLevel = Math.max(1, Math.floor(xp / 500) + 1);
 const xpNextLevel = xpLevel * 500;
 
+const predictedSuccess = Math.min(
+  95,
+  Math.round(
+    completionRate * 0.4 +
+      confidence * 40 +
+      Math.min(streakDays * 2, 15)
+  )
+);
+
+const predictedProductivityGain = Math.round(
+  predictedImpact * (confidence / 100) * 1.5
+);
+
 return {
   ...wakePlan,
   weeklyProtectedMinutes,
@@ -662,6 +675,8 @@ return {
     completionRate,
     comparisonCategory,
     message: coachInsightMessage,
+    predictedSuccess,
+    predictedProductivityGain,
   },
 
 };

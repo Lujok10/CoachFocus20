@@ -69,7 +69,8 @@ export interface WakePlan {
   momentum?: "rising" | "stable" | "falling";
   focusRoi?: "high" | "medium" | "low";
   ignoredTaskTitles?: string[];
-
+  predictedSuccess?: number;
+  predictedProductivityGain?: number;
   weeklyHighLeverageMinutes?: number;
   weeklyTotalFocusMinutes?: number;
   xp?: number;

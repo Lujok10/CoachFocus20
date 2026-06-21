@@ -176,6 +176,43 @@ function NeedleMoverCard({ wins }: { wins: number }) {
   );
 }
 
+function PredictedOutcomeCard({
+  success,
+  gain,
+}: {
+  success: number;
+  gain: number;
+}) {
+  return (
+    <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="text-sm font-bold uppercase tracking-wide text-slate-500">
+        Predicted Outcome
+      </p>
+
+      <div className="mt-4 grid grid-cols-2 gap-4">
+        <div className="rounded-2xl bg-emerald-50 p-4">
+          <p className="text-xs uppercase text-emerald-700">
+            Success Chance
+          </p>
+
+          <p className="mt-2 text-3xl font-black text-emerald-700">
+            {success}%
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-blue-50 p-4">
+          <p className="text-xs uppercase text-blue-700">
+            Expected Gain
+          </p>
+
+          <p className="mt-2 text-3xl font-black text-blue-700">
+            +{gain}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 function XpCard({
   xp,
   level,
@@ -258,7 +295,7 @@ function PerformanceSummaryCard({
 
         <div className="rounded-2xl bg-blue-50 p-4">
           <p className="text-xs font-bold uppercase tracking-wide text-blue-600">
-            Weekly goal
+           High-Leverage Goal
           </p>
           <p className="mt-1 text-xl font-black text-slate-900">
             {weeklyGoalCompleted}/{weeklyGoalTarget} blocks
@@ -431,7 +468,12 @@ const weeklyParetoShare = clampNumber(
     Math.round((paretoScoreNumber / 2) * 100),
   0,
   100
-);
+);const predictedSuccess =
+  wakePlan?.predictedSuccess ?? 70;
+
+const predictedGain =
+  wakePlan?.predictedProductivityGain ?? 10;
+
 
 const streakDays = wakePlan?.streakDays ?? 0;
 
@@ -524,6 +566,10 @@ const focusRoi =
                 </p>
               </div>
             <CoachInsightCard message={wakePlan.coachInsight?.message} />
+            <PredictedOutcomeCard
+                success={predictedSuccess}
+                gain={predictedGain}
+              />
               <div className="mt-6 grid grid-cols-2 gap-4">
                 <MetricPill variant="impact">
                   Impact: {impactLabel} ({impactValue})
