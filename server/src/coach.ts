@@ -617,14 +617,16 @@ const comparisonCategory =
 
 const nextRecommendation = planner.leverTitle;
 
+const categoryLabel = capitalizeFirst(selectedCategory);
+
 const coachInsightMessage =
-  completedCategoryBlocks > 0
-    ? `${capitalizeFirst(
-        selectedCategory
-      )} work has produced your highest completion trend this week. You completed ${completedCategoryBlocks} ${selectedCategory}-related focus block${
-        completedCategoryBlocks === 1 ? "" : "s"
-      } over the last 7 days with a ${completionRate}% completion rate. Focus20 predicts continuing this category is more likely to generate measurable results than switching categories today.`
-    : `Focus20 does not yet have enough data for this category. Completing this block will help train future recommendations and establish a performance baseline.`;
+  completionRate >= 70
+    ? `${categoryLabel} work is currently one of your strongest execution patterns. You have been finishing this type of work consistently, so Focus20 is keeping you on this lever today to protect momentum. Recommended next: ${nextRecommendation}.`
+    : completionRate >= 40
+      ? `${categoryLabel} work is showing useful momentum, but it is not fully locked in yet. Completing this block today would strengthen your consistency and give Focus20 better signal for future recommendations. Recommended next: ${nextRecommendation}.`
+      : completedCategoryBlocks > 0
+        ? `${categoryLabel} work is important, but execution has been inconsistent this week. This block is a chance to rebuild momentum and turn this category into a stronger lever. Recommended next: ${nextRecommendation}.`
+        : `${categoryLabel} work is a priority, but Focus20 does not have enough completed examples from this week yet. Completing this block will create a stronger baseline for future coaching. Recommended next: ${nextRecommendation}.`;
 const wakePlan = buildWakePlan({
   block,
   actionId: action.id,

@@ -213,6 +213,8 @@ function PredictedOutcomeCard({
     </div>
   );
 }
+
+
 function XpCard({
   xp,
   level,
@@ -222,7 +224,22 @@ function XpCard({
   level: number;
   nextLevel: number;
 }) {
-  const progress = clampNumber(Math.round((xp / Math.max(nextLevel, 1)) * 100), 0, 100);
+  const progress = clampNumber(
+    Math.round((xp / Math.max(nextLevel, 1)) * 100),
+    0,
+    100
+  );
+
+  const xpRemaining = Math.max(0, nextLevel - xp);
+
+  const nextUnlock =
+    level < 2
+      ? "Advanced AI Coaching"
+      : level < 3
+        ? "Smart Scheduling Insights"
+        : level < 4
+          ? "Weekly Performance Reports"
+          : "Elite Productivity Mode";
 
   return (
     <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -231,9 +248,11 @@ function XpCard({
           <p className="text-sm font-bold uppercase tracking-wide text-slate-500">
             Focus20 XP
           </p>
-          <p className="mt-1 text-3xl font-black text-slate-900">
-            Level {level}
+
+          <p className="text-2xl font-black text-slate-900">
+            Level {level} 🚀
           </p>
+
           <p className="mt-1 text-sm font-semibold text-slate-500">
             {xp} / {nextLevel} XP
           </p>
@@ -249,6 +268,28 @@ function XpCard({
           className="h-3 rounded-full bg-purple-500"
           style={{ width: `${progress}%` }}
         />
+      </div>
+
+      <div className="mt-4 space-y-3">
+        <div className="rounded-2xl bg-indigo-50 p-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-indigo-600">
+            Next Level
+          </p>
+
+          <p className="mt-1 text-lg font-black text-slate-900">
+            {xpRemaining} XP remaining
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-emerald-50 p-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-emerald-600">
+            Next Unlock
+          </p>
+
+          <p className="mt-1 font-black text-slate-900">
+            {nextUnlock}
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -298,7 +339,7 @@ function PerformanceSummaryCard({
            High-Leverage Goal
           </p>
           <p className="mt-1 text-xl font-black text-slate-900">
-            {weeklyGoalCompleted}/{weeklyGoalTarget} blocks
+            {weeklyGoalCompleted}/{weeklyGoalTarget} wins
           </p>
 
           <div className="mt-3 h-2 rounded-full bg-white">
@@ -327,74 +368,97 @@ function WeeklyParetoCard({
   paretoShare,
   protectedMinutes,
   wins,
+  highLeverageMinutes,
+  totalFocusMinutes,
+  needleMoverWins,
 }: {
   category?: string;
   paretoShare: number;
   protectedMinutes: number;
   wins: number;
+  highLeverageMinutes: number;
+  totalFocusMinutes: number;
+  needleMoverWins: number;
 }) {
   const safeShare = clampNumber(Math.round(paretoShare), 5, 45);
   const degrees = safeShare * 3.6;
 
-  return (
-    <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-bold text-slate-900">
-          Weekly High-Leverage Focus
-        </h2>
+ return (
+  <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="flex items-center justify-between gap-3">
+      <h2 className="text-lg font-bold text-slate-900">
+        Weekly High-Leverage Focus
+      </h2>
 
-        <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-          <Trophy className="h-3.5 w-3.5" />
-          {wins} wins
+      <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+        <Trophy className="h-3.5 w-3.5" />
+        {wins} wins
+      </div>
+    </div>
+
+    <div className="mt-5 flex flex-col items-center justify-center gap-6 md:flex-row">
+      <div className="relative h-52 w-52 rounded-full">
+        <div
+          className="absolute inset-0 rounded-full"
+          style={{
+            background: `conic-gradient(rgb(16 185 129) 0deg ${degrees}deg, rgb(226 232 240) ${degrees}deg 360deg)`,
+          }}
+        />
+
+        <div className="absolute inset-12 rounded-full bg-white" />
+
+        <div className="absolute inset-0 flex items-center justify-center text-xl font-black text-slate-700">
+          {safeShare}%
         </div>
       </div>
 
-      <div className="mt-5 flex flex-col items-center justify-center gap-6 md:flex-row">
-        <div className="relative h-52 w-52 rounded-full">
-          <div
-            className="absolute inset-0 rounded-full"
-            style={{
-              background: `conic-gradient(rgb(16 185 129) 0deg ${degrees}deg, rgb(226 232 240) ${degrees}deg 360deg)`,
-            }}
-          />
-
-          <div className="absolute inset-12 rounded-full bg-white" />
-
-          <div className="absolute inset-0 flex items-center justify-center text-xl font-black text-slate-700">
-            {safeShare}%
-          </div>
+      <div className="space-y-4 text-sm font-semibold">
+        <div className="flex items-center gap-3 text-emerald-600">
+          <span className="h-3 w-3 rounded-full bg-emerald-500" />
+          High-Leverage Work {safeShare}%
         </div>
 
-        <div className="space-y-4 text-sm font-semibold">
-          <div className="flex items-center gap-3 text-emerald-600">
-            <span className="h-3 w-3 rounded-full bg-emerald-500" />
-            High-Leverage Work {safeShare}%
-          </div>
+        <div className="h-px w-36 bg-slate-200" />
 
-          <div className="h-px w-36 bg-slate-200" />
+        <div className="flex items-center gap-3 text-slate-600">
+          <span className="h-3 w-3 rounded-full bg-slate-300" />
+          Everything Else {100 - safeShare}%
+        </div>
 
-          <div className="flex items-center gap-3 text-slate-600">
-            <span className="h-3 w-3 rounded-full bg-slate-300" />
-            Everything Else {100 - safeShare}%
-          </div>
+        <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">
+          Top lever:{" "}
+          <span className="font-black">
+            {categoryIcon(category)} {category ?? "focus"}
+          </span>
+        </div>
 
-          <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">
-            Top lever:{" "}
-            <span className="font-black">
-              {categoryIcon(category)} {category ?? "focus"}
-            </span>
-          </div>
+        <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">
+          Protected:{" "}
+          <span className="font-black">{protectedMinutes} min</span>
+        </div>
 
-          <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">
-            Protected:{" "}
-            <span className="font-black">{protectedMinutes} min</span>
-          </div>
+        <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">
+          High-leverage:{" "}
+          <span className="font-black">{highLeverageMinutes} min</span>
+        </div>
+
+        <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">
+          Needle movers:{" "}
+          <span className="font-black">{needleMoverWins}</span>
         </div>
       </div>
     </div>
-  );
-}
 
+    <p className="rounded-2xl bg-slate-50 p-4 text-sm font-normal leading-6 text-slate-600">
+      This percentage compares completed high-leverage focus time against total
+      completed focus time this week. You have {highLeverageMinutes}{" "}
+      high-leverage minutes out of{" "}
+      {Math.max(totalFocusMinutes, protectedMinutes)} tracked focus minutes.
+    </p>
+  
+  </div>
+);
+}
 export function WakeScreen({
   wakePlan,
   isLoading,
@@ -444,6 +508,12 @@ const weeklyProtectedMinutes =
 
 const weeklyWins =
   wakePlan?.paretoWins ?? Math.max(0, Math.round(paretoScoreNumber));
+
+const weeklyHighLeverageMinutes =
+  wakePlan?.weeklyHighLeverageMinutes ?? 0;
+
+const weeklyTotalFocusMinutes =
+  wakePlan?.weeklyTotalFocusMinutes ?? weeklyProtectedMinutes;  
 
 const needleMoverWins = wakePlan?.weeklyNeedleMoverWins ?? 0; 
 
@@ -591,18 +661,24 @@ const focusRoi =
              
             </motion.div>
 
-            <DailyScoreCard score={dailyScore} />
-            <NeedleMoverCard wins={needleMoverWins} />
-            <XpCard xp={xp} level={xpLevel} nextLevel={xpNextLevel} />
-
             <PerformanceSummaryCard
-              streakDays={streakDays}
-              weeklyGoalCompleted={weeklyGoalCompleted}
-              weeklyGoalTarget={weeklyGoalTarget}
-              weeklyGoalPercent={weeklyGoalPercent}
-              momentum={momentum}
-              focusRoi={focusRoi}
-            />
+                  streakDays={streakDays}
+                  weeklyGoalCompleted={weeklyGoalCompleted}
+                  weeklyGoalTarget={weeklyGoalTarget}
+                  weeklyGoalPercent={weeklyGoalPercent}
+                  momentum={momentum}
+                  focusRoi={focusRoi}
+                />
+
+                <DailyScoreCard score={dailyScore} />
+
+                <NeedleMoverCard wins={needleMoverWins} />
+
+                <XpCard
+                  xp={xp}
+                  level={xpLevel}
+                  nextLevel={xpNextLevel}
+                />
                {wakePlan.alternatives?.length > 0 && (
                 <div className="mt-3 w-full rounded-[24px] border border-slate-200 bg-white p-4 text-left shadow-sm">
                   <div className="flex items-center gap-2">
@@ -657,11 +733,14 @@ const focusRoi =
                 </div>
               )}
             <WeeklyParetoCard
-              category={wakePlan.weeklyTopLever ?? selectedCategory}
-              paretoShare={weeklyParetoShare}
-              protectedMinutes={weeklyProtectedMinutes}
-              wins={weeklyWins}
-            />
+            category={wakePlan.weeklyTopLever ?? selectedCategory}
+            paretoShare={weeklyParetoShare}
+            protectedMinutes={weeklyProtectedMinutes}
+            wins={weeklyWins}
+            highLeverageMinutes={weeklyHighLeverageMinutes}
+            totalFocusMinutes={weeklyTotalFocusMinutes}
+            needleMoverWins={needleMoverWins}
+          />
           </>
         )}
 
