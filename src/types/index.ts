@@ -56,10 +56,13 @@ export interface WakePlan {
   recommendedEnd?: string;
   leverName?: string;
 
-   paretoWins?: number;
+  // Analytics & Performance Metrics
+  paretoWins?: number;
   weeklyTopLever?: LeverCategory;
   weeklyProtectedMinutes?: number;
   weeklyNeedleMoverWins?: number;
+  dailyScore?: number;
+  streakDays?: number;
 
   nextAction?: {
     title: string;

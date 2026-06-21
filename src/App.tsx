@@ -50,13 +50,12 @@ export default function App() {
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
 
-    setClerkTokenProvider(async () => {
+   setClerkTokenProvider(async () => {
+    const token = await getToken();
 
-  const token = await getToken();
-  console.log("CLERK TOKEN:", token);
+    return token ?? null;
+  });
 
-  return token ?? null;
-});
     setAuthReady(true);
   }, [isLoaded, isSignedIn, getToken]);
 
@@ -312,13 +311,14 @@ if (error) {
       <AnimatePresence>
         {showFocusMode && wakePlan && (
           <FocusModeOverlay
-            wakePlan={wakePlan}
-            onClose={() => setShowFocusMode(false)}
-            onComplete={() => {
-              setShowFocusMode(false);
-              setShowVoiceCheckIn(true);
-            }}
-          />
+          wakePlan={wakePlan}
+          onClose={() => setShowFocusMode(false)}
+          onComplete={async () => {
+            setShowFocusMode(false);
+            setShowVoiceCheckIn(true);
+            await refreshPlan();
+          }}
+        />
         )}
       </AnimatePresence>
 

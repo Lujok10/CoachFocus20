@@ -35,34 +35,48 @@ function calculateDailyScore(input: {
   wins?: number;
 }) {
   const confidence =
-    input.confidence > 1 ? input.confidence : input.confidence * 100;
+    input.confidence > 1
+      ? input.confidence
+      : input.confidence * 100;
 
-  const impactPoints = input.impact * 4;
-  const confidencePoints = confidence * 0.2;
-  const paretoPoints = clampNumber(input.paretoScore * 15, 0, 20);
-  const protectedPoints = clampNumber(input.protectedMinutes / 3, 0, 15);
-  const winPoints = clampNumber((input.wins ?? 0) * 10, 0, 20);
+  let score = 0;
 
-  const categoryPoints =
-    input.category === "income"
-      ? 8
-      : input.category === "learning"
-        ? 7
-        : input.category === "health"
-          ? 6
-          : 4;
+  // Impact (0–50)
+  score += input.impact * 5;
 
-  return Math.round(
-    clampNumber(
-      impactPoints +
-        confidencePoints +
-        paretoPoints +
-        protectedPoints +
-        winPoints +
-        categoryPoints,
-      0,
-      100
-    )
+  // Confidence (0–30)
+  score += confidence * 0.3;
+
+  // Pareto quality (0–20)
+  score += input.paretoScore * 12;
+
+  // Weekly wins (0–15)
+  score += Math.min(
+    15,
+    (input.wins ?? 0) * 2
+  );
+
+  // Protected focus time (0–15)
+  score += Math.min(
+    15,
+    input.protectedMinutes / 60
+  );
+
+  // Category weighting
+  if (input.category === "income") {
+    score += 8;
+  } else if (input.category === "learning") {
+    score += 7;
+  } else if (input.category === "health") {
+    score += 5;
+  } else {
+    score += 3;
+  }
+
+  return clampNumber(
+    Math.round(score),
+    0,
+    100
   );
 }
 

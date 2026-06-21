@@ -4,6 +4,7 @@ import { X, Play, Pause, Check } from "lucide-react";
 import { WakePlan } from "../types";
 import { showLocalNotification } from "../services/pwaNotifications";
 import { VoiceCheckinRecorder } from "./VoiceCheckinRecorder";
+import { apiTrackEvent } from "../services/apiClient";
 
 interface FocusModeOverlayProps {
   wakePlan: WakePlan;
@@ -27,11 +28,54 @@ export function FocusModeOverlay({
 }: FocusModeOverlayProps) {
   const durationMinutes = wakePlan.block.durationMinutes ?? 60;
   const totalSeconds = durationMinutes * 60;
-  const storageKey = `focus20_timer_${wakePlan.block.id}`;
+
+  const timerStorageKey = `focus20_timer_${wakePlan.block.id}`;
+  const executionStorageKey = `focus20_execution_${wakePlan.block.id}`;
+
   const completedRef = useRef(false);
 
+  const startedAt = useMemo(() => {
+    const saved = localStorage.getItem(executionStorageKey);
+
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as { startedAt?: string };
+
+        if (parsed.startedAt) {
+          return parsed.startedAt;
+        }
+      } catch {
+        // Ignore bad local storage state
+      }
+    }
+
+    const nowIso = new Date().toISOString();
+
+    localStorage.setItem(
+      executionStorageKey,
+      JSON.stringify({
+        focusBlockId: wakePlan.block.id,
+        title: wakePlan.lever?.title ?? wakePlan.block.title,
+        category: wakePlan.lever?.category ?? wakePlan.block.leverCategory,
+        startedAt: nowIso,
+        completedAt: null,
+        actualDurationMinutes: 0,
+        status: "started",
+      })
+    );
+
+    return nowIso;
+  }, [
+    executionStorageKey,
+    wakePlan.block.id,
+    wakePlan.block.leverCategory,
+    wakePlan.block.title,
+    wakePlan.lever?.category,
+    wakePlan.lever?.title,
+  ]);
+
   const initialEndAt = useMemo(() => {
-    const saved = localStorage.getItem(storageKey);
+    const saved = localStorage.getItem(timerStorageKey);
 
     if (saved) {
       const parsed = Number(saved);
@@ -42,10 +86,10 @@ export function FocusModeOverlay({
     }
 
     const nextEndAt = Date.now() + totalSeconds * 1000;
-    localStorage.setItem(storageKey, String(nextEndAt));
+    localStorage.setItem(timerStorageKey, String(nextEndAt));
 
     return nextEndAt;
-  }, [storageKey, totalSeconds]);
+  }, [timerStorageKey, totalSeconds]);
 
   const [endAt, setEndAt] = useState(initialEndAt);
   const [secondsLeft, setSecondsLeft] = useState(() =>
@@ -53,21 +97,39 @@ export function FocusModeOverlay({
   );
   const [isRunning, setIsRunning] = useState(true);
   const [isComplete, setIsComplete] = useState(false);
+  const [isSavingCompletion, setIsSavingCompletion] = useState(false);
+
+  useEffect(() => {
+    apiTrackEvent("block_started", {
+      focusBlockId: wakePlan.block.id,
+      title: wakePlan.lever?.title ?? wakePlan.block.title,
+      category: wakePlan.lever?.category ?? wakePlan.block.leverCategory,
+      plannedDurationMinutes: durationMinutes,
+      startedAt,
+    }).catch(() => {
+      // Non-blocking analytics
+    });
+  }, [
+    durationMinutes,
+    startedAt,
+    wakePlan.block.id,
+    wakePlan.block.leverCategory,
+    wakePlan.block.title,
+    wakePlan.lever?.category,
+    wakePlan.lever?.title,
+  ]);
 
   useEffect(() => {
     if (!isRunning || isComplete) return;
 
     const tick = () => {
-      const remaining = Math.max(
-        0,
-        Math.ceil((endAt - Date.now()) / 1000)
-      );
+      const remaining = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
 
       setSecondsLeft(remaining);
 
       if (remaining <= 0 && !completedRef.current) {
         completedRef.current = true;
-        localStorage.removeItem(storageKey);
+        localStorage.removeItem(timerStorageKey);
         setIsRunning(false);
         setIsComplete(true);
 
@@ -94,13 +156,10 @@ export function FocusModeOverlay({
 
     return () => {
       window.clearInterval(interval);
-      document.removeEventListener(
-        "visibilitychange",
-        handleVisibilityChange
-      );
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [endAt, isRunning, isComplete, storageKey]);
+  }, [endAt, isRunning, isComplete, timerStorageKey]);
 
   const toggleRunning = () => {
     if (isComplete) return;
@@ -112,13 +171,56 @@ export function FocusModeOverlay({
     }
 
     const nextEndAt = Date.now() + secondsLeft * 1000;
-    localStorage.setItem(storageKey, String(nextEndAt));
+    localStorage.setItem(timerStorageKey, String(nextEndAt));
     setEndAt(nextEndAt);
     setIsRunning(true);
   };
 
-  const handleComplete = () => {
-    localStorage.removeItem(storageKey);
+  const saveCompletion = async () => {
+    if (isSavingCompletion) return;
+
+    setIsSavingCompletion(true);
+
+    const completedAt = new Date().toISOString();
+
+    const actualDurationMinutes = Math.max(
+      1,
+      Math.round(
+        (new Date(completedAt).getTime() - new Date(startedAt).getTime()) /
+          60000
+      )
+    );
+
+    const executionRecord = {
+      focusBlockId: wakePlan.block.id,
+      title: wakePlan.lever?.title ?? wakePlan.block.title,
+      category: wakePlan.lever?.category ?? wakePlan.block.leverCategory,
+      startedAt,
+      completedAt,
+      actualDurationMinutes,
+      plannedDurationMinutes: durationMinutes,
+      status: "completed",
+      paretoScore: wakePlan.paretoScore ?? null,
+      predictedImpact:
+        wakePlan.impact ??
+        wakePlan.lever?.predictedImpact ??
+        wakePlan.block.predictedImpact,
+    };
+
+    localStorage.setItem(executionStorageKey, JSON.stringify(executionRecord));
+    localStorage.removeItem(timerStorageKey);
+
+    try {
+      await apiTrackEvent("block_completed", executionRecord);
+    } catch {
+      // Keep local record even if analytics fails
+    }
+
+    setIsSavingCompletion(false);
+  };
+
+  const handleComplete = async () => {
+    await saveCompletion();
     onComplete();
   };
 
@@ -233,10 +335,11 @@ export function FocusModeOverlay({
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               onClick={handleComplete}
-              className="flex items-center gap-2 rounded-full bg-emerald-500 px-6 py-3 font-medium text-white transition-colors hover:bg-emerald-600"
+              disabled={isSavingCompletion}
+              className="flex items-center gap-2 rounded-full bg-emerald-500 px-6 py-3 font-medium text-white transition-colors hover:bg-emerald-600 disabled:opacity-60"
             >
               <Check className="h-5 w-5" />
-              Done
+              {isSavingCompletion ? "Saving..." : "Done"}
             </motion.button>
           )}
         </div>
@@ -249,7 +352,8 @@ export function FocusModeOverlay({
           >
             <VoiceCheckinRecorder
               focusBlockId={wakePlan.block.id}
-              onComplete={() => {
+              onComplete={async () => {
+                await saveCompletion();
                 onComplete();
               }}
             />

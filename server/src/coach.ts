@@ -329,8 +329,6 @@ export async function refreshWakePlan(userId: string, force = false) {
   await ensurePatternProfile(userId);
   await rebuildPatternProfile(userId);
 
-  
-
   const planner = await runAiPlanner(userId);
   const rules = await getRules(userId);
   const { start: todayStart, end: todayEnd } = todayRange();
@@ -358,90 +356,75 @@ export async function refreshWakePlan(userId: string, force = false) {
     (await userHasCalendarWriteScope(userId));
 
   const slot = await chooseSmartSlot({
-  userId,
-  durationMinutes: 60,
-  category: planner.leverCategory,
-  includeGoogleBusy: canWriteToCalendar,
-});
-
-const title = `Focus 20: ${planner.leverTitle}`;
-const leverCategory = planner.leverCategory as LeverCategory;
-
-const durationMinutes =
-  Math.round(
-    (new Date(slot.end).getTime() -
-      new Date(slot.start).getTime()) /
-      60000
-  ) || 60;
-
-const highLeverageScore = calculateHighLeverageScore({
-  category: leverCategory,
-  confidence: planner.confidence,
-  durationMinutes,
-});
-
-const predictedImpact = scoreToPredictedImpact(highLeverageScore);
-
-const confidence = Math.max(
-  predictedImpact >= 8 ? 65 : 35,
-  Math.min(95, Math.round(planner.confidence))
-);
-
-const isLowQualityRecommendation =
-  predictedImpact < 7 ||
-  confidence < 60 ||
-  highLeverageScore < 0.8;
-
-if (isLowQualityRecommendation) {
-  console.warn(
-    "Low-quality recommendation selected. Consider improving task quality or fallback logic."
-  );
-}
-
-
-
-
-let block = existing;
-
-if (!block) {
-  block = await prisma.focusBlock.create({
-    data: {
-      userId,
-      provider: canWriteToCalendar ? "google" : "local",
-      providerEventId: null,
-      title,
-      startIso: slot.start,
-      endIso: slot.end,
-      status: "scheduled",
-      leverCategory,
-      predictedImpact,
-      confidence,
-    },
-  });
-} else {
-  block = await prisma.focusBlock.update({
-    where: { id: block.id },
-    data: {
-      title,
-      startIso: slot.start,
-      endIso: slot.end,
-      leverCategory,
-      predictedImpact,
-      confidence,
-    },
-  });
-}
-
-if (rules.notificationsEnabled && rules.completedFirstLever) {
-  await scheduleFocusBlockNotifications({
     userId,
-    focusBlockId: block.id,
-    title: block.title,
-    startIso: block.startIso.toISOString(),
-  }).catch(console.error);
+    durationMinutes: 60,
+    category: planner.leverCategory,
+    includeGoogleBusy: canWriteToCalendar,
+  });
 
-  await scheduleEndOfDayCheckin(userId).catch(console.error);
-}
+  const title = `Focus 20: ${planner.leverTitle}`;
+  const leverCategory = planner.leverCategory as LeverCategory;
+
+  const durationMinutes =
+    Math.round(
+      (new Date(slot.end).getTime() - new Date(slot.start).getTime()) / 60000
+    ) || 60;
+
+  const highLeverageScore = calculateHighLeverageScore({
+    category: leverCategory,
+    confidence: planner.confidence,
+    durationMinutes,
+  });
+
+  const predictedImpact = scoreToPredictedImpact(highLeverageScore);
+
+  const confidence = Math.max(
+    predictedImpact >= 8 ? 65 : 35,
+    Math.min(95, Math.round(planner.confidence))
+  );
+
+  let block = existing;
+
+  if (!block) {
+    block = await prisma.focusBlock.create({
+      data: {
+        userId,
+        provider: canWriteToCalendar ? "google" : "local",
+        providerEventId: null,
+        title,
+        startIso: slot.start,
+        endIso: slot.end,
+        status: "scheduled",
+        leverCategory,
+        predictedImpact,
+        confidence,
+      },
+    });
+  } else {
+    block = await prisma.focusBlock.update({
+      where: { id: block.id },
+      data: {
+        title,
+        startIso: slot.start,
+        endIso: slot.end,
+        leverCategory,
+        predictedImpact,
+        confidence,
+      },
+    });
+  }
+
+  if (rules.notificationsEnabled && rules.completedFirstLever) {
+    await scheduleFocusBlockNotifications({
+      userId,
+      focusBlockId: block.id,
+      title: block.title,
+      startIso: block.startIso.toISOString(),
+    }).catch(console.error);
+
+    await scheduleEndOfDayCheckin(userId).catch(console.error);
+  }
+
   let providerEventId = block.providerEventId;
   let reservationStatus: ReservationStatus = canWriteToCalendar
     ? "reserved"
@@ -519,20 +502,70 @@ if (rules.notificationsEnabled && rules.completedFirstLever) {
     },
   });
 
- await trackAnalytics(
-  userId,
-  "wake_sentence_shown",
-  {
+  await trackAnalytics(userId, "wake_sentence_shown", {
     focusBlockId: block.id,
     source: "cache",
-  }
-);
+  });
+
   await trackAnalytics(userId, "wake_plan_refreshed", {
     force,
     blockId: block.id,
   });
 
-  return buildWakePlan({
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+  const weeklyBlocks = await prisma.focusBlock.findMany({
+    where: {
+      userId,
+      startIso: {
+        gte: sevenDaysAgo,
+      },
+    },
+  });
+
+  const weeklyProtectedMinutes = weeklyBlocks.reduce(
+    (total, item) =>
+      total +
+      Math.round((item.endIso.getTime() - item.startIso.getTime()) / 60000),
+    0
+  );
+
+  const paretoWins = weeklyBlocks.filter(
+    (item) => item.status === "completed" && item.predictedImpact >= 8
+  ).length;
+
+  const weeklyNeedleMoverWins = await prisma.feedback.count({
+    where: {
+      userId,
+      createdAt: {
+        gte: sevenDaysAgo,
+      },
+      needleMover: {
+        in: ["yes", "somewhat"],
+      },
+    },
+  });
+
+  const completedDays = new Set(
+    weeklyBlocks
+      .filter((item) => item.status === "completed")
+      .map((item) => item.startIso.toISOString().split("T")[0])
+  );
+
+  let streakDays = 0;
+  const cursor = new Date();
+
+  for (let index = 0; index < 7; index++) {
+    const dayKey = cursor.toISOString().split("T")[0];
+
+    if (!completedDays.has(dayKey)) break;
+
+    streakDays++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  const wakePlan = buildWakePlan({
     block,
     actionId: action.id,
     planner,
@@ -541,6 +574,14 @@ if (rules.notificationsEnabled && rules.completedFirstLever) {
     calendarReconnectRequired: !rules.calendarConnected,
     readOnlyCalendar: rules.calendarPermission === "read-only",
   });
+
+  return {
+    ...wakePlan,
+    weeklyProtectedMinutes,
+    paretoWins,
+    weeklyNeedleMoverWins,
+    streakDays,
+  };
 }
 
 export async function listCalendarEvents(
