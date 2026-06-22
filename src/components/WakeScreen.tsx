@@ -160,11 +160,11 @@ function NeedleMoverCard({ wins }: { wins: number }) {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-bold uppercase tracking-wide text-slate-500">
-            Needle Movers
+            High-Impact Wins
           </p>
 
           <p className="mt-1 text-3xl font-black text-slate-900">
-            {wins} this week
+            {wins} high-impact wins
           </p>
         </div>
 
@@ -202,11 +202,11 @@ function PredictedOutcomeCard({
 
         <div className="rounded-2xl bg-blue-50 p-4">
           <p className="text-xs uppercase text-blue-700">
-            Expected Gain
+            Expected Daily Score Gain
           </p>
 
           <p className="mt-2 text-3xl font-black text-blue-700">
-            +{gain}
+            +{gain} points
           </p>
         </div>
       </div>
@@ -290,8 +290,22 @@ function XpCard({
             {nextUnlock}
           </p>
         </div>
+
+        <div className="rounded-2xl bg-slate-50 p-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+            Earn XP By
+          </p>
+
+          <ul className="mt-2 space-y-1 text-sm text-slate-600">
+            <li>✓ Completing focus blocks</li>
+            <li>✓ Logging needle movers</li>
+            <li>✓ Maintaining streaks</li>
+          </ul>
+        </div>
+          
+        </div>
       </div>
-    </div>
+    
   );
 }
 
