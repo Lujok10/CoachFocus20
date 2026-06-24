@@ -324,11 +324,11 @@ app.post(
   async (req, res, next) => {
     try {
       const feedback = await recordCheckin({
-        focusBlockId: req.body.focusBlockId,
-        result: req.body?.result ?? "meh",
-        needleMover: req.body?.needleMover ?? "unconfirmed",
-        noteText: req.body?.noteText ?? req.body?.note ?? undefined,
-      });
+      focusBlockId: req.body.focusBlockId,
+      result: req.body?.result ?? "meh",
+      needleMover: req.body?.needleMover ?? "unconfirmed",
+      noteText: req.body?.noteText ?? req.body?.note ?? undefined,
+    });
       res.json({ ok: true, feedback });
     } catch (error) {
       next(error);
@@ -343,11 +343,11 @@ app.post(
   async (req, res, next) => {
     try {
       const feedback = await recordCheckin({
-        focusBlockId: req.body.focusBlockId,
-        result: req.body?.result ?? "meh",
-        needleMover: req.body?.needleMover ?? "unconfirmed",
-        noteText: req.body?.noteText ?? req.body?.note ?? undefined,
-      });
+          focusBlockId: req.body.focusBlockId,
+          result: req.body?.result ?? "meh",
+          needleMover: req.body?.needleMover ?? "unconfirmed",
+          noteText: req.body?.noteText ?? req.body?.note ?? undefined,
+        });
       res.json({ ok: true, feedback });
     } catch (error) {
       next(error);
@@ -516,14 +516,17 @@ app.get("/api/insights/weekly", async (req, res, next) => {
   }
 });
 
-app.get("/api/notifications/can-send", async (_req, res, next) => {
+app.get("/api/notifications/can-send", async (req, res, next) => {
   try {
-    res.json(await canSendNotification());
+    const userId = getRequestUserId(req);
+
+    res.json(
+      await canSendNotification(userId)
+    );
   } catch (error) {
     next(error);
   }
 });
-
 app.post(
   "/api/notifications/log-sent",
   strictWriteLimiter,
@@ -534,10 +537,10 @@ app.post(
   async (req, res, next) => {
     try {
       res.json(
-        await logNotificationSent({
-          focusBlockId: req.body?.focusBlockId,
-          type: req.body?.type ?? "pre_block_reminder",
-        })
+       await logNotificationSent({
+        focusBlockId: req.body?.focusBlockId,
+        type: req.body?.type ?? "pre_block_reminder",
+      })
       );
     } catch (error) {
       next(error);

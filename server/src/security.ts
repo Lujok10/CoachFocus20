@@ -7,7 +7,10 @@ type RateLimitOptions = {
   keyPrefix?: string;
 };
 
+
+
 const buckets = new Map<string, { count: number; resetAt: number }>();
+
 
 function getIp(req: Request) {
   const forwarded = req.headers["x-forwarded-for"];
@@ -41,6 +44,12 @@ export function rateLimit(options: RateLimitOptions) {
 }
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
+
+  console.log("CLERK CONFIG", {
+  publishableKey: process.env.CLERK_PUBLISHABLE_KEY?.slice(0, 20),
+  secretKey: process.env.CLERK_SECRET_KEY?.slice(0, 20),
+});
+  
   const auth = getAuth(req) as any;
 
   if (!auth.userId) {

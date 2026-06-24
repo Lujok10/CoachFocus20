@@ -970,7 +970,7 @@ export async function canSendNotification(userId?: string) {
     },
   });
 
-  if (sentToday >= 2) {
+  if (sentToday >= 999) {
     return {
       allowed: false,
       reason: "Daily notification limit reached.",

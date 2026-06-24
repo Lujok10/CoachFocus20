@@ -3,38 +3,57 @@ import { apiCanSendNotification, apiLogNotificationSent } from "./apiClient";
 
 const scheduledReminderIds = new Set<string>();
 
-export async function requestNotificationPermission() {
-  if (!("Notification" in window)) return false;
+async function requestNotificationPermission() {
+  if (!("Notification" in window)) {
+    return false;
+  }
 
-  if (Notification.permission === "granted") return true;
+  if (Notification.permission === "granted") {
+    return true;
+  }
 
   const permission = await Notification.requestPermission();
+
   return permission === "granted";
 }
 
 export async function scheduleFocusReminder(wakePlan: WakePlan) {
-  if (!wakePlan?.block?.id || !wakePlan.block.startIso) return;
-  if (scheduledReminderIds.has(wakePlan.block.id)) return;
-  if (!("Notification" in window)) return;
-
   const allowed = await apiCanSendNotification();
+  console.log("NOTIFICATION BACKEND ALLOWED:", allowed);
 
-  if (!allowed.allowed) return;
+  if (!allowed.allowed) {
+    console.log("NOTIFICATION STOP: backend blocked notification", allowed.reason);
+    return;
+  }
 
   const granted = await requestNotificationPermission();
+  console.log("NOTIFICATION PERMISSION:", Notification.permission);
 
-  if (!granted) return;
+  if (!granted) {
+    console.log("NOTIFICATION STOP: permission not granted");
+    return;
+  }
 
   const startMs = new Date(wakePlan.block.startIso).getTime();
   const reminderMs = startMs - 10 * 60 * 1000;
   const delay = reminderMs - Date.now();
 
-  if (delay <= 0) return;
+  console.log("NOTIFICATION TIME:", {
+    blockStart: wakePlan.block.startIso,
+    reminderAt: new Date(reminderMs).toISOString(),
+    delay,
+  });
+
+  if (delay <= 0) {
+    console.log("NOTIFICATION STOP: reminder time already passed");
+    return;
+  }
 
   scheduledReminderIds.add(wakePlan.block.id);
 
   window.setTimeout(async () => {
     const latestAllowed = await apiCanSendNotification();
+    console.log("NOTIFICATION FIRE CHECK:", latestAllowed);
 
     if (!latestAllowed.allowed) return;
 
@@ -47,4 +66,6 @@ export async function scheduleFocusReminder(wakePlan: WakePlan) {
       type: "pre_block_reminder",
     });
   }, delay);
+
+  console.log("NOTIFICATION SCHEDULED:", wakePlan.block.id);
 }
