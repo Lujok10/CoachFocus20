@@ -584,7 +584,56 @@ const realWeeklyParetoShare =
       .filter((item) => item.status === "completed")
       .map((item) => item.startIso.toISOString().split("T")[0])
   );
+const completedFocusBlocksThisWeek = weeklyBlocks.filter(
+  (block) => block.status === "completed"
+).length;
 
+const weeklyGoalTarget = 5;
+
+const weeklyGoalCompleted = paretoWins;
+
+const weeklyGoalRemaining = Math.max(
+  0,
+  weeklyGoalTarget - weeklyGoalCompleted
+);
+
+const confidenceDisplayValue =
+  confidence > 1 ? confidence : Math.round(confidence * 100);
+
+const dailyScoreBreakdown = [
+  {
+    label: "High-impact recommendation",
+    points: Math.min(30, predictedImpact * 3),
+  },
+  {
+    label: `${weeklyProtectedMinutes} protected focus minutes this week`,
+    points: Math.min(25, Math.round(weeklyProtectedMinutes / 12)),
+  },
+  {
+    label: `${paretoWins} high-leverage wins this week`,
+    points: Math.min(20, paretoWins * 5),
+  },
+  {
+    label: `${confidenceDisplayValue}% recommendation confidence`,
+    points: Math.min(15, Math.round(confidenceDisplayValue * 0.15)),
+  },
+  {
+    label: `${capitalizeFirst(leverCategory)} is your current priority lever`,
+    points: 10,
+  },
+];
+
+const nextMilestone =
+  weeklyGoalRemaining === 0
+    ? "Weekly high-leverage goal completed"
+    : `${weeklyGoalRemaining} more high-leverage win${
+        weeklyGoalRemaining === 1 ? "" : "s"
+      } to complete this week’s goal`;
+
+const skipImpact = {
+  projectedScoreDrop: 10,
+  delayedLevelBy: "about one focus session",
+};
   let streakDays = 0;
   const cursor = new Date();
 
@@ -668,6 +717,13 @@ return {
   weeklyHighLeverageMinutes,
   weeklyTotalFocusMinutes,
   weeklyParetoShare: realWeeklyParetoShare,
+  dailyScoreBreakdown,
+  completedFocusBlocksThisWeek,
+  weeklyGoalTarget,
+  weeklyGoalCompleted,
+  weeklyGoalRemaining,
+  nextMilestone,
+  skipImpact,
   xp,
   xpLevel,
   xpNextLevel,
@@ -680,6 +736,7 @@ return {
     predictedSuccess,
     predictedProductivityGain,
   },
+
 
 };
 }

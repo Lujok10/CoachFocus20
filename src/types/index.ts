@@ -90,6 +90,18 @@ export interface WakePlan {
     reason: string;
   };
 
+dailyScoreBreakdown?: {
+  label: string;
+  points: number;
+}[];
+
+completedFocusBlocksThisWeek?: number;
+weeklyGoalRemaining?: number;
+nextMilestone?: string;
+skipImpact?: {
+  projectedScoreDrop: number;
+  delayedLevelBy: string;
+};
 
 }
 

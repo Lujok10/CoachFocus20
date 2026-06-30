@@ -95,7 +95,13 @@ function categoryIcon(category?: string) {
   return "⚡";
 }
 
-function DailyScoreCard({ score }: { score: number }) {
+function DailyScoreCard({
+  score,
+  breakdown,
+}: {
+  score: number;
+  breakdown: { label: string; points: number }[];
+}) {
   return (
     <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
@@ -123,14 +129,21 @@ function DailyScoreCard({ score }: { score: number }) {
 
       <div className="mt-4 rounded-2xl bg-slate-50 p-4">
         <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-          Score Factors
+          Daily Score Breakdown
         </p>
 
-        <ul className="mt-2 space-y-1 text-sm font-medium text-slate-600">
-          <li>✓ Impact</li>
-          <li>✓ Confidence</li>
-          <li>✓ Protected focus time</li>
-          <li>✓ Weekly wins</li>
+        <ul className="mt-3 space-y-2 text-sm font-medium text-slate-600">
+          {breakdown.map((item, index) => (
+            <li
+              key={`${item.label}-${index}`}
+              className="flex justify-between gap-3"
+            >
+              <span>{item.label}</span>
+              <span className="font-black text-slate-900">
+                +{item.points}
+              </span>
+            </li>
+          ))}
         </ul>
       </div>
     </div>
@@ -156,7 +169,7 @@ function CoachInsightCard({ message }: { message?: string }) {
 function NeedleMoverCard({ wins }: { wins: number }) {
   return (
     <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-bold uppercase tracking-wide text-slate-500">
             Needle Movers
@@ -167,7 +180,8 @@ function NeedleMoverCard({ wins }: { wins: number }) {
           </p>
 
           <p className="mt-2 text-sm text-slate-500">
-            Tasks that directly moved your most important goals forward.
+            Needle movers are completed focus blocks that directly improve your
+            highest-priority goals.
           </p>
         </div>
 
@@ -349,6 +363,8 @@ function PerformanceSummaryCard({
         ? "Falling ↓"
         : "Stable →";
 
+  const remainingWins = Math.max(0, weeklyGoalTarget - weeklyGoalCompleted);
+
   return (
     <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
       <div className="grid grid-cols-2 gap-3">
@@ -379,6 +395,14 @@ function PerformanceSummaryCard({
 
           <p className="mt-1 text-xl font-black text-slate-900">
             {weeklyGoalCompleted}/{weeklyGoalTarget} wins
+          </p>
+
+          <p className="mt-2 text-xs font-semibold text-blue-700">
+            {remainingWins === 0
+              ? "Weekly goal completed"
+              : `${remainingWins} more win${
+                  remainingWins === 1 ? "" : "s"
+                } to complete this week`}
           </p>
 
           <div className="mt-3 h-2 rounded-full bg-white">
@@ -422,13 +446,13 @@ function WeeklyParetoCard({
 }) {
   const totalMinutes = Math.max(totalFocusMinutes, protectedMinutes, 1);
 
-const safeShare = clampNumber(
-  Math.round((highLeverageMinutes / totalMinutes) * 100),
-  0,
-  100
-);
+  const calculatedShare =
+    highLeverageMinutes > 0
+      ? Math.round((highLeverageMinutes / totalMinutes) * 100)
+      : Math.round(paretoShare);
+
+  const safeShare = clampNumber(calculatedShare, 0, 100);
   const degrees = safeShare * 3.6;
-  
 
   return (
     <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -504,9 +528,11 @@ const safeShare = clampNumber(
       </p>
 
       <p className="mt-3 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold leading-6 text-emerald-700">
-        Keep spending most of your protected time on {categoryIcon(category)}{" "}
-        {category ?? "focus"} work. Your next milestone is reaching 60%
-        high-leverage focus time.
+        {safeShare < 60
+          ? "Your next milestone is reaching 60% high-leverage focus time."
+          : safeShare < 80
+            ? "Excellent progress. Aim for 80% high-leverage consistency this week."
+            : "Outstanding. Your focus habits are becoming highly Pareto-optimized."}
       </p>
     </div>
   );
@@ -516,10 +542,14 @@ function IfSkippedCard({
   category,
   weeklyGoalCompleted,
   weeklyGoalTarget,
+  dailyScore,
+  xpRemaining,
 }: {
   category?: string;
   weeklyGoalCompleted: number;
   weeklyGoalTarget: number;
+  dailyScore: number;
+  xpRemaining: number;
 }) {
   return (
     <div className="mt-3 rounded-[24px] border border-amber-200 bg-amber-50 p-5">
@@ -528,12 +558,18 @@ function IfSkippedCard({
       </p>
 
       <ul className="mt-3 space-y-2 text-sm font-semibold leading-6 text-slate-700">
-        <li>⚠ Weekly goal becomes harder to reach</li>
-        <li>⚠ {category ?? "Focus"} momentum may weaken</li>
         <li>
-          ⚠ Current progress stays at {weeklyGoalCompleted}/{weeklyGoalTarget}{" "}
+          ⚠ Progress stays at {weeklyGoalCompleted}/{weeklyGoalTarget} weekly
           wins
         </li>
+        <li>
+          ⚠ Today’s projected score may drop from {dailyScore} to{" "}
+          {Math.max(0, dailyScore - 10)}
+        </li>
+        <li>
+          ⚠ Level progress may stay {xpRemaining} XP away from the next level
+        </li>
+        <li>⚠ {category ?? "Focus"} momentum may weaken</li>
       </ul>
     </div>
   );
@@ -600,6 +636,7 @@ export function WakeScreen({
   const xp = wakePlan?.xp ?? 0;
   const xpLevel = wakePlan?.xpLevel ?? 1;
   const xpNextLevel = wakePlan?.xpNextLevel ?? 500;
+  const xpRemaining = Math.max(0, xpNextLevel - xp);
 
   const streakDays = wakePlan?.streakDays ?? 0;
 
@@ -643,26 +680,43 @@ export function WakeScreen({
   );
 
   const predictedSuccess = wakePlan?.predictedSuccess ?? 70;
-
   const predictedGain = wakePlan?.predictedProductivityGain ?? 10;
 
   const predictionFactors = [
     weeklyProtectedMinutes >= 120
-      ? "✓ Strong protected focus window"
-      : "⚠ Limited protected focus time this week",
+      ? `✓ ${weeklyProtectedMinutes} protected focus minutes this week`
+      : `⚠ Only ${weeklyProtectedMinutes} protected focus minutes this week`,
 
     weeklyWins >= 3
-      ? "✓ Recent high-leverage wins"
-      : "⚠ Build more weekly wins",
+      ? `✓ ${weeklyWins} high-leverage wins this week`
+      : `⚠ ${Math.max(0, weeklyGoalTarget - weeklyWins)} more wins needed for weekly goal`,
+
+    selectedCategory
+      ? `✓ ${selectedCategory} is your strongest current lever`
+      : "⚠ Focus category is still being learned",
 
     confidenceDisplay >= 75
-      ? "✓ Recommendation confidence is high"
-      : "⚠ Confidence is still improving",
-
-    streakDays >= 3
-      ? "✓ Consistency streak is building"
-      : "⚠ Streak is still developing",
+      ? `✓ Recommendation confidence is ${confidenceDisplay}%`
+      : `⚠ Confidence is ${confidenceDisplay}% and improves with completed sessions`,
   ];
+
+  const dailyScoreBreakdown =
+    wakePlan?.dailyScoreBreakdown ?? [
+      { label: "High-impact recommendation", points: 30 },
+      {
+        label: `${weeklyProtectedMinutes} protected focus minutes this week`,
+        points: 25,
+      },
+      { label: `${weeklyWins} weekly wins`, points: 20 },
+      {
+        label: `${confidenceDisplay}% recommendation confidence`,
+        points: 10,
+      },
+      {
+        label: `${selectedCategory ?? "Focus"} priority lever`,
+        points: 10,
+      },
+    ];
 
   const momentum =
     wakePlan?.momentum ??
@@ -752,6 +806,8 @@ export function WakeScreen({
                 category={selectedCategory}
                 weeklyGoalCompleted={weeklyGoalCompleted}
                 weeklyGoalTarget={weeklyGoalTarget}
+                dailyScore={dailyScore}
+                xpRemaining={xpRemaining}
               />
 
               <div className="mt-6 grid grid-cols-2 gap-4">
@@ -782,7 +838,10 @@ export function WakeScreen({
               focusRoi={focusRoi}
             />
 
-            <DailyScoreCard score={dailyScore} />
+            <DailyScoreCard
+              score={dailyScore}
+              breakdown={dailyScoreBreakdown}
+            />
 
             <NeedleMoverCard wins={needleMoverWins} />
 
