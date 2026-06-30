@@ -420,9 +420,15 @@ function WeeklyParetoCard({
   totalFocusMinutes: number;
   needleMoverWins: number;
 }) {
-  const safeShare = clampNumber(Math.round(paretoShare), 0, 100);
-  const degrees = safeShare * 3.6;
   const totalMinutes = Math.max(totalFocusMinutes, protectedMinutes, 1);
+
+const safeShare = clampNumber(
+  Math.round((highLeverageMinutes / totalMinutes) * 100),
+  0,
+  100
+);
+  const degrees = safeShare * 3.6;
+  
 
   return (
     <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
