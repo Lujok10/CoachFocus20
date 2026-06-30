@@ -43,25 +43,13 @@ function calculateDailyScore(input: {
 
   let score = 25;
 
-  // Actual execution should matter most.
   score += Math.min(25, wins * 12);
-
-  // Streak should help, but not dominate.
   score += Math.min(15, streakDays * 5);
-
-  // Protected time should help gradually.
   score += Math.min(15, input.protectedMinutes / 20);
-
-  // Recommendation quality should help, but should not create a fake high score.
   score += Math.min(15, input.paretoScore * 10);
-
-  // Confidence should add a small amount only.
   score += Math.min(10, confidence * 0.1);
-
-  // Impact should add a small amount only.
   score += Math.min(10, input.impact);
 
-  // Category bonus should be tiny.
   if (input.category === "income") {
     score += 3;
   } else if (input.category === "learning") {
@@ -80,7 +68,7 @@ function MetricPill({
   children,
 }: {
   variant: "impact" | "effort" | "confidence" | "pareto";
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const classes = {
     impact: "bg-emerald-100 text-emerald-700",
@@ -115,6 +103,7 @@ function DailyScoreCard({ score }: { score: number }) {
           <p className="text-sm font-bold uppercase tracking-wide text-slate-500">
             Focus20 Daily Score
           </p>
+
           <p className="mt-1 text-3xl font-black text-slate-900">
             {score}/100
           </p>
@@ -131,15 +120,24 @@ function DailyScoreCard({ score }: { score: number }) {
           style={{ width: `${score}%` }}
         />
       </div>
+
+      <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+          Score Factors
+        </p>
+
+        <ul className="mt-2 space-y-1 text-sm font-medium text-slate-600">
+          <li>✓ Impact</li>
+          <li>✓ Confidence</li>
+          <li>✓ Protected focus time</li>
+          <li>✓ Weekly wins</li>
+        </ul>
+      </div>
     </div>
   );
 }
 
-function CoachInsightCard({
-  message,
-}: {
-  message?: string;
-}) {
+function CoachInsightCard({ message }: { message?: string }) {
   if (!message) return null;
 
   return (
@@ -154,6 +152,7 @@ function CoachInsightCard({
     </div>
   );
 }
+
 function NeedleMoverCard({ wins }: { wins: number }) {
   return (
     <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -165,6 +164,10 @@ function NeedleMoverCard({ wins }: { wins: number }) {
 
           <p className="mt-1 text-3xl font-black text-slate-900">
             {wins} needle movers
+          </p>
+
+          <p className="mt-2 text-sm text-slate-500">
+            Tasks that directly moved your most important goals forward.
           </p>
         </div>
 
@@ -196,6 +199,7 @@ function PredictedOutcomeCard({
           <p className="text-xs uppercase text-emerald-700">
             Success Chance
           </p>
+
           <p className="mt-2 text-3xl font-black text-emerald-700">
             {success}%
           </p>
@@ -205,6 +209,7 @@ function PredictedOutcomeCard({
           <p className="text-xs uppercase text-blue-700">
             Expected Daily Score Gain
           </p>
+
           <p className="mt-2 text-3xl font-black text-blue-700">
             +{gain} points
           </p>
@@ -218,15 +223,13 @@ function PredictedOutcomeCard({
 
         <ul className="mt-3 space-y-2 text-sm font-medium text-slate-700">
           {factors.map((factor, index) => (
-            <li key={`${factor}-${index}`}>✓ {factor}</li>
+            <li key={`${factor}-${index}`}>{factor}</li>
           ))}
         </ul>
       </div>
     </div>
   );
 }
-
-
 
 function XpCard({
   xp,
@@ -237,7 +240,7 @@ function XpCard({
   level: number;
   nextLevel: number;
 }) {
-  const progress = clampNumber(
+  const progressPercent = clampNumber(
     Math.round((xp / Math.max(nextLevel, 1)) * 100),
     0,
     100
@@ -269,6 +272,10 @@ function XpCard({
           <p className="mt-1 text-sm font-semibold text-slate-500">
             {xp} / {nextLevel} XP
           </p>
+
+          <p className="mt-1 text-sm font-semibold text-slate-500">
+            {progressPercent}% complete
+          </p>
         </div>
 
         <div className="rounded-full bg-purple-50 px-4 py-2 text-sm font-black text-purple-700">
@@ -279,7 +286,7 @@ function XpCard({
       <div className="mt-4 h-3 rounded-full bg-slate-100">
         <div
           className="h-3 rounded-full bg-purple-500"
-          style={{ width: `${progress}%` }}
+          style={{ width: `${progressPercent}%` }}
         />
       </div>
 
@@ -315,10 +322,8 @@ function XpCard({
             <li>✓ Maintaining streaks</li>
           </ul>
         </div>
-          
-        </div>
       </div>
-    
+    </div>
   );
 }
 
@@ -338,7 +343,11 @@ function PerformanceSummaryCard({
   focusRoi: "high" | "medium" | "low";
 }) {
   const momentumLabel =
-    momentum === "rising" ? "Rising ↑" : momentum === "falling" ? "Falling ↓" : "Stable →";
+    momentum === "rising"
+      ? "Rising ↑"
+      : momentum === "falling"
+        ? "Falling ↓"
+        : "Stable →";
 
   return (
     <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -347,6 +356,7 @@ function PerformanceSummaryCard({
           <p className="text-xs font-bold uppercase tracking-wide text-orange-600">
             Current streak
           </p>
+
           <p className="mt-1 text-2xl font-black text-slate-900">
             🔥 {streakDays} days
           </p>
@@ -356,6 +366,7 @@ function PerformanceSummaryCard({
           <p className="text-xs font-bold uppercase tracking-wide text-emerald-600">
             Momentum
           </p>
+
           <p className="mt-1 text-2xl font-black text-slate-900">
             {momentumLabel}
           </p>
@@ -363,8 +374,9 @@ function PerformanceSummaryCard({
 
         <div className="rounded-2xl bg-blue-50 p-4">
           <p className="text-xs font-bold uppercase tracking-wide text-blue-600">
-           High-Leverage Goal
+            High-Leverage Goal
           </p>
+
           <p className="mt-1 text-xl font-black text-slate-900">
             {weeklyGoalCompleted}/{weeklyGoalTarget} wins
           </p>
@@ -381,6 +393,7 @@ function PerformanceSummaryCard({
           <p className="text-xs font-bold uppercase tracking-wide text-purple-600">
             Focus ROI
           </p>
+
           <p className="mt-1 text-2xl font-black capitalize text-slate-900">
             {focusRoi}
           </p>
@@ -407,86 +420,119 @@ function WeeklyParetoCard({
   totalFocusMinutes: number;
   needleMoverWins: number;
 }) {
-  const safeShare = clampNumber(Math.round(paretoShare), 5, 45);
+  const safeShare = clampNumber(Math.round(paretoShare), 0, 100);
   const degrees = safeShare * 3.6;
+  const totalMinutes = Math.max(totalFocusMinutes, protectedMinutes, 1);
 
- return (
-  <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-    <div className="flex items-center justify-between gap-3">
-      <h2 className="text-lg font-bold text-slate-900">
-        Weekly High-Leverage Focus
-      </h2>
+  return (
+    <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-bold text-slate-900">
+          Weekly High-Leverage Focus
+        </h2>
 
-      <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-        <Trophy className="h-3.5 w-3.5" />
-        {wins} wins
+        <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+          <Trophy className="h-3.5 w-3.5" />
+          {wins} wins
+        </div>
       </div>
+
+      <div className="mt-5 flex flex-col items-center justify-center gap-6 md:flex-row">
+        <div className="relative h-52 w-52 rounded-full">
+          <div
+            className="absolute inset-0 rounded-full"
+            style={{
+              background: `conic-gradient(rgb(16 185 129) 0deg ${degrees}deg, rgb(226 232 240) ${degrees}deg 360deg)`,
+            }}
+          />
+
+          <div className="absolute inset-12 rounded-full bg-white" />
+
+          <div className="absolute inset-0 flex items-center justify-center text-xl font-black text-slate-700">
+            {safeShare}%
+          </div>
+        </div>
+
+        <div className="space-y-4 text-sm font-semibold">
+          <div className="flex items-center gap-3 text-emerald-600">
+            <span className="h-3 w-3 rounded-full bg-emerald-500" />
+            High-Leverage Work {safeShare}%
+          </div>
+
+          <div className="h-px w-36 bg-slate-200" />
+
+          <div className="flex items-center gap-3 text-slate-600">
+            <span className="h-3 w-3 rounded-full bg-slate-300" />
+            Everything Else {100 - safeShare}%
+          </div>
+
+          <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">
+            Top lever:{" "}
+            <span className="font-black">
+              {categoryIcon(category)} {category ?? "focus"}
+            </span>
+          </div>
+
+          <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">
+            Protected:{" "}
+            <span className="font-black">{protectedMinutes} min</span>
+          </div>
+
+          <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">
+            High-leverage:{" "}
+            <span className="font-black">{highLeverageMinutes} min</span>
+          </div>
+
+          <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">
+            Needle movers:{" "}
+            <span className="font-black">{needleMoverWins}</span>
+          </div>
+        </div>
+      </div>
+
+      <p className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm font-normal leading-6 text-slate-600">
+        {highLeverageMinutes} ÷ {totalMinutes} focus minutes = {safeShare}%.
+        Focus20 counts Pareto-aligned work as high leverage. This week, your
+        strongest completed work came from {categoryIcon(category)}{" "}
+        {category ?? "focus"}.
+      </p>
+
+      <p className="mt-3 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold leading-6 text-emerald-700">
+        Keep spending most of your protected time on {categoryIcon(category)}{" "}
+        {category ?? "focus"} work. Your next milestone is reaching 60%
+        high-leverage focus time.
+      </p>
     </div>
-
-    <div className="mt-5 flex flex-col items-center justify-center gap-6 md:flex-row">
-      <div className="relative h-52 w-52 rounded-full">
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: `conic-gradient(rgb(16 185 129) 0deg ${degrees}deg, rgb(226 232 240) ${degrees}deg 360deg)`,
-          }}
-        />
-
-        <div className="absolute inset-12 rounded-full bg-white" />
-
-        <div className="absolute inset-0 flex items-center justify-center text-xl font-black text-slate-700">
-          {safeShare}%
-        </div>
-      </div>
-
-      <div className="space-y-4 text-sm font-semibold">
-        <div className="flex items-center gap-3 text-emerald-600">
-          <span className="h-3 w-3 rounded-full bg-emerald-500" />
-          High-Leverage Work {safeShare}%
-        </div>
-
-        <div className="h-px w-36 bg-slate-200" />
-
-        <div className="flex items-center gap-3 text-slate-600">
-          <span className="h-3 w-3 rounded-full bg-slate-300" />
-          Everything Else {100 - safeShare}%
-        </div>
-
-        <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">
-          Top lever:{" "}
-          <span className="font-black">
-            {categoryIcon(category)} {category ?? "focus"}
-          </span>
-        </div>
-
-        <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">
-          Protected:{" "}
-          <span className="font-black">{protectedMinutes} min</span>
-        </div>
-
-        <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">
-          High-leverage:{" "}
-          <span className="font-black">{highLeverageMinutes} min</span>
-        </div>
-
-        <div className="rounded-2xl bg-slate-50 p-3 text-slate-700">
-          Needle movers:{" "}
-          <span className="font-black">{needleMoverWins}</span>
-        </div>
-      </div>
-    </div>
-
-  <p className="rounded-2xl bg-slate-50 p-4 text-sm font-normal leading-6 text-slate-600">
-      {highLeverageMinutes} ÷{" "}
-      {Math.max(totalFocusMinutes, protectedMinutes)} focus minutes ={" "}
-      {safeShare}%. Focus20 counts Pareto-aligned work as high leverage.
-      This week, your strongest completed work came from{" "}
-      {categoryIcon(category)} {category ?? "focus"}.
-  </p>
-  
-  </div>
-);
+  );
 }
+
+function IfSkippedCard({
+  category,
+  weeklyGoalCompleted,
+  weeklyGoalTarget,
+}: {
+  category?: string;
+  weeklyGoalCompleted: number;
+  weeklyGoalTarget: number;
+}) {
+  return (
+    <div className="mt-3 rounded-[24px] border border-amber-200 bg-amber-50 p-5">
+      <p className="text-sm font-black uppercase tracking-wide text-amber-700">
+        If Skipped
+      </p>
+
+      <ul className="mt-3 space-y-2 text-sm font-semibold leading-6 text-slate-700">
+        <li>⚠ Weekly goal becomes harder to reach</li>
+        <li>⚠ {category ?? "Focus"} momentum may weaken</li>
+        <li>
+          ⚠ Current progress stays at {weeklyGoalCompleted}/{weeklyGoalTarget}{" "}
+          wins
+        </li>
+      </ul>
+    </div>
+  );
+}
+
 export function WakeScreen({
   wakePlan,
   isLoading,
@@ -574,6 +620,7 @@ export function WakeScreen({
         category: selectedCategory,
         protectedMinutes: weeklyProtectedMinutes,
         wins: weeklyWins,
+        streakDays,
       })
     : 0;
 
@@ -592,20 +639,24 @@ export function WakeScreen({
   const predictedSuccess = wakePlan?.predictedSuccess ?? 70;
 
   const predictedGain = wakePlan?.predictedProductivityGain ?? 10;
+
   const predictionFactors = [
-  weeklyProtectedMinutes >= 120
-    ? "Strong protected focus time this week"
-    : "Focus time is still building this week",
-  weeklyWins >= 2
-    ? "Recent high-leverage wins"
-    : "Opportunity to build more high-leverage wins",
-  selectedCategory === "income"
-    ? "Income lever has high priority"
-    : `${selectedCategory ?? "Focus"} category matches today’s plan`,
-  confidenceDisplay >= 70
-    ? "Recommendation confidence is strong"
-    : "Recommendation confidence is still improving",
-];
+    weeklyProtectedMinutes >= 120
+      ? "✓ Strong protected focus window"
+      : "⚠ Limited protected focus time this week",
+
+    weeklyWins >= 3
+      ? "✓ Recent high-leverage wins"
+      : "⚠ Build more weekly wins",
+
+    confidenceDisplay >= 75
+      ? "✓ Recommendation confidence is high"
+      : "⚠ Confidence is still improving",
+
+    streakDays >= 3
+      ? "✓ Consistency streak is building"
+      : "⚠ Streak is still developing",
+  ];
 
   const momentum =
     wakePlan?.momentum ??
@@ -618,7 +669,6 @@ export function WakeScreen({
       : weeklyProtectedMinutes >= 120
         ? "medium"
         : "low");
- 
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-slate-50 px-5">
@@ -644,6 +694,7 @@ export function WakeScreen({
                 ) : (
                   <span className="h-2 w-2 rounded-full bg-current" />
                 )}
+
                 {statusLabel}
               </span>
             </motion.div>
@@ -682,12 +733,21 @@ export function WakeScreen({
                     "This is your highest-leverage move right now because it fits your available focus window and supports your most important lever."}
                 </p>
               </div>
-            <CoachInsightCard message={wakePlan.coachInsight?.message} />
-            <PredictedOutcomeCard
-              success={predictedSuccess}
-              gain={predictedGain}
-              factors={predictionFactors}
-            />
+
+              <CoachInsightCard message={wakePlan.coachInsight?.message} />
+
+              <PredictedOutcomeCard
+                success={predictedSuccess}
+                gain={predictedGain}
+                factors={predictionFactors}
+              />
+
+              <IfSkippedCard
+                category={selectedCategory}
+                weeklyGoalCompleted={weeklyGoalCompleted}
+                weeklyGoalTarget={weeklyGoalTarget}
+              />
+
               <div className="mt-6 grid grid-cols-2 gap-4">
                 <MetricPill variant="impact">
                   Impact: {impactLabel} ({impactValue})
@@ -705,90 +765,90 @@ export function WakeScreen({
                   Pareto Score: {paretoScore}
                 </MetricPill>
               </div>
-
-             
             </motion.div>
 
             <PerformanceSummaryCard
-                  streakDays={streakDays}
-                  weeklyGoalCompleted={weeklyGoalCompleted}
-                  weeklyGoalTarget={weeklyGoalTarget}
-                  weeklyGoalPercent={weeklyGoalPercent}
-                  momentum={momentum}
-                  focusRoi={focusRoi}
-                />
+              streakDays={streakDays}
+              weeklyGoalCompleted={weeklyGoalCompleted}
+              weeklyGoalTarget={weeklyGoalTarget}
+              weeklyGoalPercent={weeklyGoalPercent}
+              momentum={momentum}
+              focusRoi={focusRoi}
+            />
 
-                <DailyScoreCard score={dailyScore} />
+            <DailyScoreCard score={dailyScore} />
 
-                <NeedleMoverCard wins={needleMoverWins} />
+            <NeedleMoverCard wins={needleMoverWins} />
 
-                <XpCard
-                  xp={xp}
-                  level={xpLevel}
-                  nextLevel={xpNextLevel}
-                />
-               {wakePlan.alternatives?.length > 0 && (
-                <div className="mt-3 w-full rounded-[24px] border border-slate-200 bg-white p-4 text-left shadow-sm">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-emerald-500" />
+            <XpCard
+              xp={xp}
+              level={xpLevel}
+              nextLevel={xpNextLevel}
+            />
 
-                    <p className="text-sm font-black uppercase tracking-wide text-slate-500">
-                      Other strong options today
-                    </p>
-                  </div>
+            {wakePlan.alternatives?.length > 0 && (
+              <div className="mt-3 w-full rounded-[24px] border border-slate-200 bg-white p-4 text-left shadow-sm">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-emerald-500" />
 
-                  <div className="mt-3 space-y-3">
-                    {wakePlan.alternatives.slice(0, 2).map((alt, index) => (
-                      <div
-                        key={`${alt.title}-${index}`}
-                        className="rounded-2xl bg-slate-50 p-3"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-bold text-slate-900">
-                              {categoryIcon(alt.category)} {alt.title}
-                            </p>
+                  <p className="text-sm font-black uppercase tracking-wide text-slate-500">
+                    Other strong options today
+                  </p>
+                </div>
 
-                            <p className="mt-1 text-sm text-slate-500">
-                              {categoryIcon(alt.category)} {alt.category} •{" "}
-                              {alt.time}
-                            </p>
-                          </div>
+                <div className="mt-3 space-y-3">
+                  {wakePlan.alternatives.slice(0, 2).map((alt, index) => (
+                    <div
+                      key={`${alt.title}-${index}`}
+                      className="rounded-2xl bg-slate-50 p-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-bold text-slate-900">
+                            {categoryIcon(alt.category)} {alt.title}
+                          </p>
 
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setWhyNotIndex(
-                                whyNotIndex === index ? null : index
-                              )
-                            }
-                            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600"
-                          >
-                            <HelpCircle className="h-3.5 w-3.5" />
-                            Why not?
-                          </button>
+                          <p className="mt-1 text-sm text-slate-500">
+                            {categoryIcon(alt.category)} {alt.category} •{" "}
+                            {alt.time}
+                          </p>
                         </div>
 
-                        {whyNotIndex === index && (
-                          <p className="mt-3 rounded-xl bg-white p-3 text-sm leading-6 text-slate-600">
-                            {alt.whyNotReason ??
-                              `${selectedTitle} was selected first because it had the strongest combined Pareto score right now: category priority, impact, confidence, timing, and effort. ${alt.title} is still a strong backup option for later today.`}
-                          </p>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setWhyNotIndex(
+                              whyNotIndex === index ? null : index
+                            )
+                          }
+                          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600"
+                        >
+                          <HelpCircle className="h-3.5 w-3.5" />
+                          Why not?
+                        </button>
                       </div>
-                    ))}
-                  </div>
+
+                      {whyNotIndex === index && (
+                        <p className="mt-3 rounded-xl bg-white p-3 text-sm leading-6 text-slate-600">
+                          {alt.whyNotReason ??
+                            `${selectedTitle} was selected first because it had the strongest combined Pareto score right now: category priority, impact, confidence, timing, and effort. ${alt.title} is still a strong backup option for later today.`}
+                        </p>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              )}
+              </div>
+            )}
+
             <WeeklyParetoCard
-            category={wakePlan.weeklyTopLever ?? selectedCategory}
-            paretoShare={weeklyParetoShare}
-            protectedMinutes={weeklyProtectedMinutes}
-            wins={weeklyWins}
-            highLeverageMinutes={weeklyHighLeverageMinutes}
-            totalFocusMinutes={weeklyTotalFocusMinutes}
-            needleMoverWins={needleMoverWins}
-          />
+              category={wakePlan.weeklyTopLever ?? selectedCategory}
+              paretoShare={weeklyParetoShare}
+              protectedMinutes={weeklyProtectedMinutes}
+              wins={weeklyWins}
+              highLeverageMinutes={weeklyHighLeverageMinutes}
+              totalFocusMinutes={weeklyTotalFocusMinutes}
+              needleMoverWins={needleMoverWins}
+            />
           </>
         )}
 

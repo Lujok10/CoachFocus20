@@ -621,12 +621,12 @@ const categoryLabel = capitalizeFirst(selectedCategory);
 
 const coachInsightMessage =
   completionRate >= 70
-    ? `${categoryLabel} work is currently one of your strongest execution patterns. You have been finishing this type of work consistently, so Focus20 is keeping you on this lever today to protect momentum. Recommended next: ${nextRecommendation}.`
+    ? `${categoryLabel} work is becoming one of your strongest habits. You are converting high-leverage opportunities into completed work, so Focus20 is keeping you on this lever to protect momentum.`
     : completionRate >= 40
-      ? `${categoryLabel} work is showing useful momentum, but it is not fully locked in yet. Completing this block today would strengthen your consistency and give Focus20 better signal for future recommendations. Recommended next: ${nextRecommendation}.`
+      ? `${categoryLabel} work is showing useful momentum, but it is not fully locked in yet. Completing this block today would strengthen consistency and improve future recommendations.`
       : completedCategoryBlocks > 0
-        ? `${categoryLabel} work is important, but execution has been inconsistent this week. This block is a chance to rebuild momentum and turn this category into a stronger lever. Recommended next: ${nextRecommendation}.`
-        : `${categoryLabel} work is a priority, but Focus20 does not have enough completed examples from this week yet. Completing this block will create a stronger baseline for future coaching. Recommended next: ${nextRecommendation}.`;
+        ? `${categoryLabel} work is important, but execution has been inconsistent this week. This block is a chance to rebuild momentum and turn this category into a stronger lever.`
+        : `${categoryLabel} work is a priority, but Focus20 does not have enough completed examples yet. Completing this block will create a stronger baseline for future coaching.`;
 const wakePlan = buildWakePlan({
   block,
   actionId: action.id,
