@@ -160,11 +160,11 @@ function NeedleMoverCard({ wins }: { wins: number }) {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-bold uppercase tracking-wide text-slate-500">
-            High-Impact Wins
+            Needle Movers
           </p>
 
           <p className="mt-1 text-3xl font-black text-slate-900">
-            {wins} high-impact wins
+            {wins} needle movers
           </p>
         </div>
 
@@ -179,9 +179,11 @@ function NeedleMoverCard({ wins }: { wins: number }) {
 function PredictedOutcomeCard({
   success,
   gain,
+  factors,
 }: {
   success: number;
   gain: number;
+  factors: string[];
 }) {
   return (
     <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -194,7 +196,6 @@ function PredictedOutcomeCard({
           <p className="text-xs uppercase text-emerald-700">
             Success Chance
           </p>
-
           <p className="mt-2 text-3xl font-black text-emerald-700">
             {success}%
           </p>
@@ -204,15 +205,27 @@ function PredictedOutcomeCard({
           <p className="text-xs uppercase text-blue-700">
             Expected Daily Score Gain
           </p>
-
           <p className="mt-2 text-3xl font-black text-blue-700">
             +{gain} points
           </p>
         </div>
       </div>
+
+      <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+          Prediction Factors
+        </p>
+
+        <ul className="mt-3 space-y-2 text-sm font-medium text-slate-700">
+          {factors.map((factor, index) => (
+            <li key={`${factor}-${index}`}>✓ {factor}</li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
+
 
 
 function XpCard({
@@ -463,12 +476,13 @@ function WeeklyParetoCard({
       </div>
     </div>
 
-    <p className="rounded-2xl bg-slate-50 p-4 text-sm font-normal leading-6 text-slate-600">
-      This percentage compares completed high-leverage focus time against total
-      completed focus time this week. You have {highLeverageMinutes}{" "}
-      high-leverage minutes out of{" "}
-      {Math.max(totalFocusMinutes, protectedMinutes)} tracked focus minutes.
-    </p>
+  <p className="rounded-2xl bg-slate-50 p-4 text-sm font-normal leading-6 text-slate-600">
+      {highLeverageMinutes} ÷{" "}
+      {Math.max(totalFocusMinutes, protectedMinutes)} focus minutes ={" "}
+      {safeShare}%. Focus20 counts Pareto-aligned work as high leverage.
+      This week, your strongest completed work came from{" "}
+      {categoryIcon(category)} {category ?? "focus"}.
+  </p>
   
   </div>
 );
@@ -484,107 +498,126 @@ export function WakeScreen({
   const [whyNotIndex, setWhyNotIndex] = useState<number | null>(null);
 
   const statusLabel = wakePlan?.calendarReconnectRequired
-  ? "Reconnect calendar"
-  : wakePlan?.readOnlyCalendar
-    ? "Read-only calendar"
-    : wakePlan?.isReserved
-      ? "Block reserved"
-      : "Suggested time";
+    ? "Reconnect calendar"
+    : wakePlan?.readOnlyCalendar
+      ? "Read-only calendar"
+      : wakePlan?.isReserved
+        ? "Block reserved"
+        : "Suggested time";
 
-const confidenceDisplay =
-  wakePlan?.confidence && wakePlan.confidence > 1
-    ? Math.round(wakePlan.confidence)
-    : Math.round((wakePlan?.confidence ?? 0.82) * 100);
+  const confidenceDisplay =
+    wakePlan?.confidence && wakePlan.confidence > 1
+      ? Math.round(wakePlan.confidence)
+      : Math.round((wakePlan?.confidence ?? 0.82) * 100);
 
-const impactValue =
-  wakePlan?.impact ??
-  wakePlan?.lever?.predictedImpact ??
-  wakePlan?.block?.predictedImpact ??
-  5;
+  const impactValue =
+    wakePlan?.impact ??
+    wakePlan?.lever?.predictedImpact ??
+    wakePlan?.block?.predictedImpact ??
+    5;
 
-const impactLabel =
-  impactValue >= 8 ? "High" : impactValue >= 5 ? "Medium" : "Low";
+  const impactLabel =
+    impactValue >= 8 ? "High" : impactValue >= 5 ? "Medium" : "Low";
 
-const effortMinutes =
-  wakePlan?.effortMinutes ?? wakePlan?.block?.durationMinutes ?? 60;
+  const effortMinutes =
+    wakePlan?.effortMinutes ?? wakePlan?.block?.durationMinutes ?? 60;
 
-const paretoScoreNumber = wakePlan?.paretoScore ?? 0;
-const paretoScore = paretoScoreNumber.toFixed(2);
+  const paretoScoreNumber = wakePlan?.paretoScore ?? 0;
+  const paretoScore = paretoScoreNumber.toFixed(2);
 
-const selectedTitle =
-  wakePlan?.leverName ?? wakePlan?.lever?.title ?? wakePlan?.block?.title;
+  const selectedTitle =
+    wakePlan?.leverName ?? wakePlan?.lever?.title ?? wakePlan?.block?.title;
 
-const selectedCategory =
-  wakePlan?.lever?.category ?? wakePlan?.block?.leverCategory;
+  const selectedCategory =
+    wakePlan?.lever?.category ?? wakePlan?.block?.leverCategory;
 
-const weeklyProtectedMinutes =
-  wakePlan?.weeklyProtectedMinutes ?? effortMinutes;
+  const weeklyProtectedMinutes =
+    wakePlan?.weeklyProtectedMinutes ?? effortMinutes;
 
-const weeklyWins =
-  wakePlan?.paretoWins ?? Math.max(0, Math.round(paretoScoreNumber));
+  const weeklyWins =
+    wakePlan?.paretoWins ?? Math.max(0, Math.round(paretoScoreNumber));
 
-const weeklyHighLeverageMinutes =
-  wakePlan?.weeklyHighLeverageMinutes ?? 0;
+  const weeklyHighLeverageMinutes =
+    wakePlan?.weeklyHighLeverageMinutes ?? 0;
 
-const weeklyTotalFocusMinutes =
-  wakePlan?.weeklyTotalFocusMinutes ?? weeklyProtectedMinutes;  
+  const weeklyTotalFocusMinutes =
+    wakePlan?.weeklyTotalFocusMinutes ?? weeklyProtectedMinutes;
 
-const needleMoverWins = wakePlan?.weeklyNeedleMoverWins ?? 0; 
+  const needleMoverWins = wakePlan?.weeklyNeedleMoverWins ?? 0;
 
-const xp = wakePlan?.xp ?? 0;
-const xpLevel = wakePlan?.xpLevel ?? 1;
-const xpNextLevel = wakePlan?.xpNextLevel ?? 500;
+  const xp = wakePlan?.xp ?? 0;
+  const xpLevel = wakePlan?.xpLevel ?? 1;
+  const xpNextLevel = wakePlan?.xpNextLevel ?? 500;
 
-const dailyScore = wakePlan
-  ? calculateDailyScore({
-      impact: impactValue,
-      confidence: confidenceDisplay,
-      paretoScore: paretoScoreNumber,
-      category: selectedCategory,
-      protectedMinutes: weeklyProtectedMinutes,
-      wins: weeklyWins,
-      streakDays: wakePlan.streakDays ?? 0,
-    })
-  : 0;
+  const streakDays = wakePlan?.streakDays ?? 0;
 
-const weeklyParetoShare = clampNumber(
-  wakePlan?.weeklyParetoShare ??
-    Math.round((paretoScoreNumber / 2) * 100),
-  0,
-  100
-);const predictedSuccess =
-  wakePlan?.predictedSuccess ?? 70;
+  const weeklyGoalTarget = wakePlan?.weeklyGoalTarget ?? 5;
 
-const predictedGain =
-  wakePlan?.predictedProductivityGain ?? 10;
+  const weeklyGoalCompleted =
+    wakePlan?.weeklyGoalCompleted ?? weeklyWins;
 
+  const weeklyGoalPercent =
+    wakePlan?.weeklyGoalPercent ??
+    clampNumber(
+      Math.round(
+        (weeklyGoalCompleted / Math.max(weeklyGoalTarget, 1)) * 100
+      ),
+      0,
+      100
+    );
 
-const streakDays = wakePlan?.streakDays ?? 0;
+  const rawDailyScore = wakePlan
+    ? calculateDailyScore({
+        impact: impactValue,
+        confidence: confidenceDisplay,
+        paretoScore: paretoScoreNumber,
+        category: selectedCategory,
+        protectedMinutes: weeklyProtectedMinutes,
+        wins: weeklyWins,
+      })
+    : 0;
 
-const weeklyGoalTarget = wakePlan?.weeklyGoalTarget ?? 5;
+  const dailyScore =
+    weeklyGoalCompleted >= weeklyGoalTarget
+      ? rawDailyScore
+      : Math.min(rawDailyScore, 95);
 
-const weeklyGoalCompleted =
-  wakePlan?.weeklyGoalCompleted ?? weeklyWins;
-
-const weeklyGoalPercent =
-  wakePlan?.weeklyGoalPercent ??
-  clampNumber(
-    Math.round((weeklyGoalCompleted / Math.max(weeklyGoalTarget, 1)) * 100),
+  const weeklyParetoShare = clampNumber(
+    wakePlan?.weeklyParetoShare ??
+      Math.round((paretoScoreNumber / 2) * 100),
     0,
     100
   );
 
-const momentum =
-  wakePlan?.momentum ??
-  (weeklyWins >= 3 ? "rising" : weeklyWins >= 1 ? "stable" : "falling");
+  const predictedSuccess = wakePlan?.predictedSuccess ?? 70;
 
-const focusRoi =
-  wakePlan?.focusRoi ??
-  (selectedCategory === "income" && weeklyWins >= 1
-    ? "high"
-    : weeklyProtectedMinutes >= 120
-      ? "medium"
-      : "low");
+  const predictedGain = wakePlan?.predictedProductivityGain ?? 10;
+  const predictionFactors = [
+  weeklyProtectedMinutes >= 120
+    ? "Strong protected focus time this week"
+    : "Focus time is still building this week",
+  weeklyWins >= 2
+    ? "Recent high-leverage wins"
+    : "Opportunity to build more high-leverage wins",
+  selectedCategory === "income"
+    ? "Income lever has high priority"
+    : `${selectedCategory ?? "Focus"} category matches today’s plan`,
+  confidenceDisplay >= 70
+    ? "Recommendation confidence is strong"
+    : "Recommendation confidence is still improving",
+];
+
+  const momentum =
+    wakePlan?.momentum ??
+    (weeklyWins >= 3 ? "rising" : weeklyWins >= 1 ? "stable" : "falling");
+
+  const focusRoi =
+    wakePlan?.focusRoi ??
+    (selectedCategory === "income" && weeklyWins >= 1
+      ? "high"
+      : weeklyProtectedMinutes >= 120
+        ? "medium"
+        : "low");
  
 
   return (
@@ -651,9 +684,10 @@ const focusRoi =
               </div>
             <CoachInsightCard message={wakePlan.coachInsight?.message} />
             <PredictedOutcomeCard
-                success={predictedSuccess}
-                gain={predictedGain}
-              />
+              success={predictedSuccess}
+              gain={predictedGain}
+              factors={predictionFactors}
+            />
               <div className="mt-6 grid grid-cols-2 gap-4">
                 <MetricPill variant="impact">
                   Impact: {impactLabel} ({impactValue})
