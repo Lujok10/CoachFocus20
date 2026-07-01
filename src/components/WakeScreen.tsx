@@ -132,19 +132,22 @@ function DailyScoreCard({
           Daily Score Breakdown
         </p>
 
-        <ul className="mt-3 space-y-2 text-sm font-medium text-slate-600">
+        <ul className="mt-3 space-y-3 text-sm font-medium text-slate-600">
           {breakdown.map((item, index) => (
             <li
               key={`${item.label}-${index}`}
-              className="flex justify-between gap-3"
+              className="rounded-xl bg-white p-3"
             >
-              <span>{item.label}</span>
-              <span className="font-black text-slate-900">
-                +{item.points}
-              </span>
+              <div className="flex justify-between gap-3">
+                <span>{item.label}</span>
+                <span className="font-black text-slate-900">
+                  +{item.points}
+                </span>
+              </div>
             </li>
           ))}
         </ul>
+        
       </div>
     </div>
   );
@@ -180,8 +183,7 @@ function NeedleMoverCard({ wins }: { wins: number }) {
           </p>
 
           <p className="mt-2 text-sm text-slate-500">
-            Needle movers are completed focus blocks that directly improve your
-            highest-priority goals.
+           You have {wins} completed focus block{wins === 1 ? "" : "s"} this week that directly moved your highest-priority goals forward.
           </p>
         </div>
 
@@ -313,6 +315,11 @@ function XpCard({
           <p className="mt-1 text-lg font-black text-slate-900">
             {xpRemaining} XP remaining
           </p>
+
+          <p className="mt-1 text-sm font-semibold text-indigo-700">
+            About {Math.max(1, Math.ceil(xpRemaining / 50))} successful focus session
+            {Math.ceil(xpRemaining / 50) === 1 ? "" : "s"} to level up
+          </p>
         </div>
 
         <div className="rounded-2xl bg-emerald-50 p-3">
@@ -397,20 +404,23 @@ function PerformanceSummaryCard({
             {weeklyGoalCompleted}/{weeklyGoalTarget} wins
           </p>
 
-          <p className="mt-2 text-xs font-semibold text-blue-700">
-            {remainingWins === 0
-              ? "Weekly goal completed"
-              : `${remainingWins} more win${
-                  remainingWins === 1 ? "" : "s"
-                } to complete this week`}
-          </p>
+         <p className="mt-2 text-xs font-semibold text-blue-700">
+          {remainingWins === 0
+            ? "🎉 You've completed this week's high-leverage goal. Everything from here builds momentum."
+            : remainingWins === 1
+              ? "🎯 One more high-impact session completes this week's goal."
+              : `🎯 ${remainingWins} more high-impact sessions complete this week's goal.`}
+        </p>
 
           <div className="mt-3 h-2 rounded-full bg-white">
             <div
               className="h-2 rounded-full bg-blue-500"
-              style={{ width: `${weeklyGoalPercent}%` }}
+              style={{ width: `${Math.min(100, Math.max(0, weeklyGoalPercent))}%` }}
             />
           </div>
+          <p className="mt-3 text-xs text-slate-500">
+            {Math.round(weeklyGoalPercent)}% of this week's target completed
+          </p>
         </div>
 
         <div className="rounded-2xl bg-purple-50 p-4">
@@ -529,48 +539,105 @@ function WeeklyParetoCard({
 
       <p className="mt-3 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold leading-6 text-emerald-700">
         {safeShare < 60
-          ? "Your next milestone is reaching 60% high-leverage focus time."
+          ? `Your next milestone is reaching 60% high-leverage focus time. You are currently at ${safeShare}%.`
           : safeShare < 80
-            ? "Excellent progress. Aim for 80% high-leverage consistency this week."
-            : "Outstanding. Your focus habits are becoming highly Pareto-optimized."}
+            ? `Excellent progress. You are at ${safeShare}% high-leverage focus time. Aim for 80% consistency this week.`
+            : `Outstanding. You are at ${safeShare}% high-leverage focus time, which means most of your protected time is going toward your highest-return work.`}
       </p>
     </div>
   );
 }
 
 function IfSkippedCard({
-  category,
-  weeklyGoalCompleted,
-  weeklyGoalTarget,
-  dailyScore,
-  xpRemaining,
-}: {
-  category?: string;
-  weeklyGoalCompleted: number;
-  weeklyGoalTarget: number;
-  dailyScore: number;
-  xpRemaining: number;
-}) {
+    category,
+    weeklyGoalCompleted,
+    weeklyGoalTarget,
+    dailyScore,
+    xpRemaining,
+  }: {
+    category?: string;
+    weeklyGoalCompleted: number;
+    weeklyGoalTarget: number;
+    dailyScore: number;
+    xpRemaining: number;
+  }) {
+
   return (
     <div className="mt-3 rounded-[24px] border border-amber-200 bg-amber-50 p-5">
-      <p className="text-sm font-black uppercase tracking-wide text-amber-700">
-        If Skipped
+          <p className="text-sm font-black uppercase tracking-wide text-amber-700">
+            If Skipped
+          </p>
+
+          <ul className="mt-3 space-y-2 text-sm font-semibold leading-6 text-slate-700">
+            <li>
+              ⚠ Progress stays at {weeklyGoalCompleted}/{weeklyGoalTarget} weekly wins
+            </li>
+
+            <li>
+              ⚠ Today’s projected score may drop from {dailyScore} to{" "}
+              {Math.max(0, dailyScore - 10)}
+            </li>
+
+            <li>
+              ⚠ You stay {xpRemaining} XP away from the next level
+            </li>
+
+            <li>
+              ⚠ {category ?? "Focus"} momentum may weaken
+            </li>
+          </ul>
+      </div>
+  );
+}
+
+function TodayVsYesterdayCard({
+  todayScore,
+  yesterdayScore,
+  difference,
+  reason,
+}: {
+  todayScore: number;
+  yesterdayScore: number;
+  difference: number;
+  reason: string;
+}) {
+  const isUp = difference >= 0;
+
+  return (
+    <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 text-left shadow-sm">
+      <p className="text-sm font-bold uppercase tracking-wide text-slate-500">
+        Today vs Yesterday
       </p>
 
-      <ul className="mt-3 space-y-2 text-sm font-semibold leading-6 text-slate-700">
-        <li>
-          ⚠ Progress stays at {weeklyGoalCompleted}/{weeklyGoalTarget} weekly
-          wins
-        </li>
-        <li>
-          ⚠ Today’s projected score may drop from {dailyScore} to{" "}
-          {Math.max(0, dailyScore - 10)}
-        </li>
-        <li>
-          ⚠ Level progress may stay {xpRemaining} XP away from the next level
-        </li>
-        <li>⚠ {category ?? "Focus"} momentum may weaken</li>
-      </ul>
+      <div className="mt-4 grid grid-cols-2 gap-4">
+        <div className="rounded-2xl bg-emerald-50 p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
+            Today
+          </p>
+          <p className="mt-1 text-3xl font-black text-slate-900">
+            {todayScore}
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-slate-50 p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+            Yesterday
+          </p>
+          <p className="mt-1 text-3xl font-black text-slate-900">
+            {yesterdayScore}
+          </p>
+        </div>
+      </div>
+
+      <div
+        className={`mt-4 rounded-2xl p-4 text-sm font-semibold leading-6 ${
+          isUp
+            ? "bg-emerald-50 text-emerald-700"
+            : "bg-amber-50 text-amber-700"
+        }`}
+      >
+        {isUp ? "↑" : "↓"} {Math.abs(difference)} points. {reason}
+      </div>
     </div>
   );
 }
@@ -683,22 +750,22 @@ export function WakeScreen({
   const predictedGain = wakePlan?.predictedProductivityGain ?? 10;
 
   const predictionFactors = [
-    weeklyProtectedMinutes >= 120
-      ? `✓ ${weeklyProtectedMinutes} protected focus minutes this week`
-      : `⚠ Only ${weeklyProtectedMinutes} protected focus minutes this week`,
+  weeklyProtectedMinutes >= 120
+    ? `✓ ${weeklyProtectedMinutes} protected focus minutes this week`
+    : `⚠ Only ${weeklyProtectedMinutes} protected focus minutes this week`,
 
-    weeklyWins >= 3
-      ? `✓ ${weeklyWins} high-leverage wins this week`
-      : `⚠ ${Math.max(0, weeklyGoalTarget - weeklyWins)} more wins needed for weekly goal`,
+  weeklyWins >= 3
+    ? `✓ ${weeklyWins} high-leverage wins this week`
+    : `⚠ ${Math.max(0, weeklyGoalTarget - weeklyWins)} more wins needed for weekly goal`,
 
-    selectedCategory
-      ? `✓ ${selectedCategory} is your strongest current lever`
-      : "⚠ Focus category is still being learned",
+  selectedCategory
+    ? `✓ ${selectedCategory} is currently your strongest lever`
+    : "⚠ Focus20 is still learning your strongest category",
 
-    confidenceDisplay >= 75
-      ? `✓ Recommendation confidence is ${confidenceDisplay}%`
-      : `⚠ Confidence is ${confidenceDisplay}% and improves with completed sessions`,
-  ];
+  confidenceDisplay >= 75
+    ? `✓ Recommendation confidence is strong at ${confidenceDisplay}%`
+    : `⚠ Confidence is ${confidenceDisplay}%; completing today’s block will improve future predictions`,
+];
 
   const dailyScoreBreakdown =
     wakePlan?.dailyScoreBreakdown ?? [
@@ -850,6 +917,15 @@ export function WakeScreen({
               level={xpLevel}
               nextLevel={xpNextLevel}
             />
+
+            {wakePlan.todayVsYesterday && (
+              <TodayVsYesterdayCard
+                todayScore={wakePlan.todayVsYesterday.todayScore}
+                yesterdayScore={wakePlan.todayVsYesterday.yesterdayScore}
+                difference={wakePlan.todayVsYesterday.difference}
+                reason={wakePlan.todayVsYesterday.reason}
+              />
+            )}
 
             {wakePlan.alternatives?.length > 0 && (
               <div className="mt-3 w-full rounded-[24px] border border-slate-200 bg-white p-4 text-left shadow-sm">

@@ -102,6 +102,12 @@ skipImpact?: {
   projectedScoreDrop: number;
   delayedLevelBy: string;
 };
+todayVsYesterday?: {
+  todayScore: number;
+  yesterdayScore: number;
+  difference: number;
+  reason: string;
+};
 
 }
 

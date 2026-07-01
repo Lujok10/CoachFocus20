@@ -326,6 +326,10 @@ export async function updateRules(userId: string, data: Record<string, unknown>)
   return getRules(userId);
 }
 
+function clampNumber(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
 export async function refreshWakePlan(userId: string, force = false) {
   await ensureUser(userId);
   await ensurePatternProfile(userId);
@@ -384,6 +388,9 @@ export async function refreshWakePlan(userId: string, force = false) {
     predictedImpact >= 8 ? 65 : 35,
     Math.min(95, Math.round(planner.confidence))
   );
+
+  const confidenceDisplayValue =
+    confidence > 1 ? confidence : Math.round(confidence * 100);
 
   let block = existing;
 
@@ -499,7 +506,9 @@ export async function refreshWakePlan(userId: string, force = false) {
       undoPayload: {
         focusBlockId: block.id,
         providerEventId,
-        operation: providerEventId ? "delete_google_event" : "cancel_focus_block",
+        operation: providerEventId
+          ? "delete_google_event"
+          : "cancel_focus_block",
       },
     },
   });
@@ -533,8 +542,7 @@ export async function refreshWakePlan(userId: string, force = false) {
     0
   );
 
-  const weeklyHighLeverageMinutes = weeklyBlocks.reduce(
-  (total, item) => {
+  const weeklyHighLeverageMinutes = weeklyBlocks.reduce((total, item) => {
     if (item.status !== "completed") return total;
     if (item.predictedImpact < 8) return total;
 
@@ -542,26 +550,21 @@ export async function refreshWakePlan(userId: string, force = false) {
       total +
       Math.round((item.endIso.getTime() - item.startIso.getTime()) / 60000)
     );
-  },
-  0
-);
+  }, 0);
 
-const weeklyTotalFocusMinutes = weeklyBlocks.reduce(
-  (total, item) => {
+  const weeklyTotalFocusMinutes = weeklyBlocks.reduce((total, item) => {
     if (item.status !== "completed") return total;
 
     return (
       total +
       Math.round((item.endIso.getTime() - item.startIso.getTime()) / 60000)
     );
-  },
-  0
-);
+  }, 0);
 
-const realWeeklyParetoShare =
-  weeklyTotalFocusMinutes === 0
-    ? 0
-    : Math.round((weeklyHighLeverageMinutes / weeklyTotalFocusMinutes) * 100);
+  const realWeeklyParetoShare =
+    weeklyTotalFocusMinutes === 0
+      ? 0
+      : Math.round((weeklyHighLeverageMinutes / weeklyTotalFocusMinutes) * 100);
 
   const paretoWins = weeklyBlocks.filter(
     (item) => item.status === "completed" && item.predictedImpact >= 8
@@ -584,56 +587,117 @@ const realWeeklyParetoShare =
       .filter((item) => item.status === "completed")
       .map((item) => item.startIso.toISOString().split("T")[0])
   );
-const completedFocusBlocksThisWeek = weeklyBlocks.filter(
-  (block) => block.status === "completed"
-).length;
 
-const weeklyGoalTarget = 5;
+  const completedFocusBlocksThisWeek = weeklyBlocks.filter(
+    (item) => item.status === "completed"
+  ).length;
 
-const weeklyGoalCompleted = paretoWins;
+  const weeklyGoalTarget = 5;
+  const weeklyGoalCompleted = paretoWins;
 
-const weeklyGoalRemaining = Math.max(
-  0,
-  weeklyGoalTarget - weeklyGoalCompleted
-);
+  const weeklyGoalRemaining = Math.max(
+    0,
+    weeklyGoalTarget - weeklyGoalCompleted
+  );
 
-const confidenceDisplayValue =
-  confidence > 1 ? confidence : Math.round(confidence * 100);
+  const dailyScoreBreakdown = [
+    {
+      label: "High-impact recommendation",
+      points: Math.min(30, predictedImpact * 3),
+    },
+    {
+      label: `${weeklyProtectedMinutes} protected focus minutes this week`,
+      points: Math.min(25, Math.round(weeklyProtectedMinutes / 12)),
+    },
+    {
+      label: `${paretoWins} high-leverage wins this week`,
+      points: Math.min(20, paretoWins * 5),
+    },
+    {
+      label: `${confidenceDisplayValue}% recommendation confidence`,
+      points: Math.min(15, Math.round(confidenceDisplayValue * 0.15)),
+    },
+    {
+      label: `${capitalizeFirst(leverCategory)} is your current priority lever`,
+      points: 10,
+    },
+  ];
 
-const dailyScoreBreakdown = [
-  {
-    label: "High-impact recommendation",
-    points: Math.min(30, predictedImpact * 3),
-  },
-  {
-    label: `${weeklyProtectedMinutes} protected focus minutes this week`,
-    points: Math.min(25, Math.round(weeklyProtectedMinutes / 12)),
-  },
-  {
-    label: `${paretoWins} high-leverage wins this week`,
-    points: Math.min(20, paretoWins * 5),
-  },
-  {
-    label: `${confidenceDisplayValue}% recommendation confidence`,
-    points: Math.min(15, Math.round(confidenceDisplayValue * 0.15)),
-  },
-  {
-    label: `${capitalizeFirst(leverCategory)} is your current priority lever`,
-    points: 10,
-  },
-];
+  const yesterdayStart = new Date();
+  yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+  yesterdayStart.setHours(0, 0, 0, 0);
 
-const nextMilestone =
-  weeklyGoalRemaining === 0
-    ? "Weekly high-leverage goal completed"
-    : `${weeklyGoalRemaining} more high-leverage win${
-        weeklyGoalRemaining === 1 ? "" : "s"
-      } to complete this week’s goal`;
+  const yesterdayEnd = new Date();
+  yesterdayEnd.setDate(yesterdayEnd.getDate() - 1);
+  yesterdayEnd.setHours(23, 59, 59, 999);
 
-const skipImpact = {
-  projectedScoreDrop: 10,
-  delayedLevelBy: "about one focus session",
-};
+  const yesterdayBlocks = await prisma.focusBlock.findMany({
+    where: {
+      userId,
+      status: "completed",
+      startIso: {
+        gte: yesterdayStart,
+        lt: yesterdayEnd,
+      },
+    },
+  });
+
+  const yesterdayProtectedMinutes = yesterdayBlocks.reduce(
+    (total, item) =>
+      total +
+      Math.round((item.endIso.getTime() - item.startIso.getTime()) / 60000),
+    0
+  );
+
+  const yesterdayNeedleMovers = await prisma.feedback.count({
+    where: {
+      userId,
+      needleMover: {
+        in: ["yes", "somewhat"],
+      },
+      createdAt: {
+        gte: yesterdayStart,
+        lt: yesterdayEnd,
+      },
+    },
+  });
+
+  const yesterdayScore = clampNumber(
+    25 +
+      Math.min(25, yesterdayNeedleMovers * 12) +
+      Math.min(25, Math.round(yesterdayProtectedMinutes / 12)),
+    0,
+    100
+  );
+
+  const todayScore = clampNumber(
+    dailyScoreBreakdown.reduce((total, item) => total + item.points, 0),
+    0,
+    100
+  );
+
+  const todayVsYesterday = {
+    todayScore,
+    yesterdayScore,
+    difference: todayScore - yesterdayScore,
+    reason:
+      todayScore >= yesterdayScore
+        ? `Today is trending higher because you have ${weeklyProtectedMinutes} protected focus minutes and ${paretoWins} high-leverage wins this week.`
+        : "Today is trending lower because yesterday had stronger completed focus activity.",
+  };
+
+  const nextMilestone =
+    weeklyGoalRemaining === 0
+      ? "Weekly high-leverage goal completed"
+      : `${weeklyGoalRemaining} more high-leverage win${
+          weeklyGoalRemaining === 1 ? "" : "s"
+        } to complete this week’s goal`;
+
+  const skipImpact = {
+    projectedScoreDrop: 10,
+    delayedLevelBy: "about one focus session",
+  };
+
   let streakDays = 0;
   const cursor = new Date();
 
@@ -648,97 +712,98 @@ const skipImpact = {
 
   const selectedCategory = planner.leverCategory as LeverCategory;
 
-const categoryBlocks = weeklyBlocks.filter(
-  (item) => item.leverCategory === selectedCategory
-);
+  const categoryBlocks = weeklyBlocks.filter(
+    (item) => item.leverCategory === selectedCategory
+  );
 
-const completedCategoryBlocks = categoryBlocks.filter(
-  (item) => item.status === "completed"
-).length;
+  const completedCategoryBlocks = categoryBlocks.filter(
+    (item) => item.status === "completed"
+  ).length;
 
-const completionRate =
-  categoryBlocks.length === 0
-    ? 0
-    : Math.round((completedCategoryBlocks / categoryBlocks.length) * 100);
+  const completionRate =
+    categoryBlocks.length === 0
+      ? 0
+      : Math.round((completedCategoryBlocks / categoryBlocks.length) * 100);
 
-const comparisonCategory =
-  selectedCategory === "income" ? "learning" : "income";
+  const categoryLabel = capitalizeFirst(selectedCategory);
 
-const nextRecommendation = planner.leverTitle;
+  const coachInsightMessage =
+    completionRate >= 70
+      ? `${categoryLabel} work is becoming one of your strongest habits. You are converting high-leverage opportunities into completed work, so Focus20 is keeping you on this lever to protect momentum.`
+      : completionRate >= 40
+        ? `${categoryLabel} work is showing useful momentum, but it is not fully locked in yet. Completing this block today would strengthen consistency and improve future recommendations.`
+        : completedCategoryBlocks > 0
+          ? `${categoryLabel} work is important, but execution has been inconsistent this week. This block is a chance to rebuild momentum and turn this category into a stronger lever.`
+          : `${categoryLabel} work is a priority, but Focus20 does not have enough completed examples yet. Completing this block will create a stronger baseline for future coaching.`;
 
-const categoryLabel = capitalizeFirst(selectedCategory);
+  const wakePlan = buildWakePlan({
+    block,
+    actionId: action.id,
+    planner,
+    reservationStatus,
+    isReserved,
+    calendarReconnectRequired: !rules.calendarConnected,
+    readOnlyCalendar: rules.calendarPermission === "read-only",
+  });
 
-const coachInsightMessage =
-  completionRate >= 70
-    ? `${categoryLabel} work is becoming one of your strongest habits. You are converting high-leverage opportunities into completed work, so Focus20 is keeping you on this lever to protect momentum.`
-    : completionRate >= 40
-      ? `${categoryLabel} work is showing useful momentum, but it is not fully locked in yet. Completing this block today would strengthen consistency and improve future recommendations.`
-      : completedCategoryBlocks > 0
-        ? `${categoryLabel} work is important, but execution has been inconsistent this week. This block is a chance to rebuild momentum and turn this category into a stronger lever.`
-        : `${categoryLabel} work is a priority, but Focus20 does not have enough completed examples yet. Completing this block will create a stronger baseline for future coaching.`;
-const wakePlan = buildWakePlan({
-  block,
-  actionId: action.id,
-  planner,
-  reservationStatus,
-  isReserved,
-  calendarReconnectRequired: !rules.calendarConnected,
-  readOnlyCalendar: rules.calendarPermission === "read-only",
-});
+  const xp =
+    paretoWins * 50 +
+    weeklyNeedleMoverWins * 40 +
+    streakDays * 25 +
+    Math.floor(weeklyProtectedMinutes / 10);
 
-const xp =
-  paretoWins * 50 +
-  weeklyNeedleMoverWins * 40 +
-  streakDays * 25 +
-  Math.floor(weeklyProtectedMinutes / 10);
+  const xpLevel = Math.max(1, Math.floor(xp / 500) + 1);
+  const xpNextLevel = xpLevel * 500;
 
-const xpLevel = Math.max(1, Math.floor(xp / 500) + 1);
-const xpNextLevel = xpLevel * 500;
+  const predictedSuccess = Math.min(
+    95,
+    Math.round(
+      completionRate * 0.4 +
+        confidenceDisplayValue * 0.4 +
+        Math.min(streakDays * 2, 15)
+    )
+  );
 
-const predictedSuccess = Math.min(
-  95,
-  Math.round(
-    completionRate * 0.4 +
-      confidence * 40 +
-      Math.min(streakDays * 2, 15)
-  )
-);
+  const predictedProductivityGain = Math.round(
+    predictedImpact * (confidenceDisplayValue / 100) * 1.5
+  );
 
-const predictedProductivityGain = Math.round(
-  predictedImpact * (confidence / 100) * 1.5
-);
+  return {
+    ...wakePlan,
 
-return {
-  ...wakePlan,
-  weeklyProtectedMinutes,
-  paretoWins,
-  weeklyNeedleMoverWins,
-  streakDays,
-  weeklyHighLeverageMinutes,
-  weeklyTotalFocusMinutes,
-  weeklyParetoShare: realWeeklyParetoShare,
-  dailyScoreBreakdown,
-  completedFocusBlocksThisWeek,
-  weeklyGoalTarget,
-  weeklyGoalCompleted,
-  weeklyGoalRemaining,
-  nextMilestone,
-  skipImpact,
-  xp,
-  xpLevel,
-  xpNextLevel,
-  coachInsight: {
-    category: selectedCategory,
-    completedCategoryBlocks,
-    completionRate,
-    comparisonCategory,
-    message: coachInsightMessage,
+    weeklyProtectedMinutes,
+    paretoWins,
+    weeklyNeedleMoverWins,
+    streakDays,
+
+    weeklyHighLeverageMinutes,
+    weeklyTotalFocusMinutes,
+    weeklyParetoShare: realWeeklyParetoShare,
+
+    dailyScoreBreakdown,
+    todayVsYesterday,
+    completedFocusBlocksThisWeek,
+
+    weeklyGoalTarget,
+    weeklyGoalCompleted,
+    weeklyGoalRemaining,
+    nextMilestone,
+    skipImpact,
+
+    xp,
+    xpLevel,
+    xpNextLevel,
+
     predictedSuccess,
     predictedProductivityGain,
-  },
 
-
-};
+    coachInsight: {
+      category: selectedCategory,
+      completedCategoryBlocks,
+      completionRate,
+      message: coachInsightMessage,
+    },
+  };
 }
 
 export async function listCalendarEvents(
