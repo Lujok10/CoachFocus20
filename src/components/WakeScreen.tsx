@@ -642,6 +642,55 @@ function TodayVsYesterdayCard({
   );
 }
 
+function MemoryInsightCard({
+  insight,
+  recentBlocks,
+}: {
+  insight?: string;
+  recentBlocks?: {
+    title: string;
+    category: string;
+    completedAtIso: string;
+    durationMinutes: number;
+    needleMover?: boolean;
+  }[];
+}) {
+  if (!insight && (!recentBlocks || recentBlocks.length === 0)) return null;
+
+  return (
+    <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 text-left shadow-sm">
+      <p className="text-sm font-bold uppercase tracking-wide text-slate-500">
+        Coach Memory
+      </p>
+
+      {insight && (
+        <p className="mt-3 text-sm font-medium leading-6 text-slate-700">
+          {insight}
+        </p>
+      )}
+
+      {recentBlocks && recentBlocks.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {recentBlocks.slice(0, 3).map((block, index) => (
+            <div
+              key={`${block.title}-${index}`}
+              className="rounded-2xl bg-slate-50 p-3"
+            >
+              <p className="font-bold text-slate-900">
+                {block.needleMover ? "🎯" : "✓"} {block.title}
+              </p>
+
+              <p className="mt-1 text-xs font-semibold text-slate-500">
+                {block.category} • {block.durationMinutes} min
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function WakeScreen({
   wakePlan,
   isLoading,
@@ -862,6 +911,10 @@ export function WakeScreen({
               </div>
 
               <CoachInsightCard message={wakePlan.coachInsight?.message} />
+              <MemoryInsightCard
+                insight={wakePlan.memoryInsight}
+                recentBlocks={wakePlan.recentCompletedBlocks}
+              />
 
               <PredictedOutcomeCard
                 success={predictedSuccess}
@@ -969,12 +1022,37 @@ export function WakeScreen({
                         </button>
                       </div>
 
-                      {whyNotIndex === index && (
-                        <p className="mt-3 rounded-xl bg-white p-3 text-sm leading-6 text-slate-600">
-                          {alt.whyNotReason ??
-                            `${selectedTitle} was selected first because it had the strongest combined Pareto score right now: category priority, impact, confidence, timing, and effort. ${alt.title} is still a strong backup option for later today.`}
+                                          {whyNotIndex === index && (
+                      <div className="mt-3 rounded-xl bg-white p-3 text-sm leading-6 text-slate-600">
+                        <p className="font-black text-slate-900">
+                          Why this was ranked #{alt.estimatedPriority ?? index + 2}
                         </p>
-                      )}
+
+                        <div className="mt-2 flex gap-2">
+                          <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                            Score {alt.score ?? alt.paretoScore ?? "N/A"}
+                          </span>
+
+                          {alt.recommendedTomorrow && (
+                            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+                              Likely tomorrow
+                            </span>
+                          )}
+                        </div>
+
+                        <ul className="mt-3 space-y-2">
+                          {(alt.whyNot?.length
+                            ? alt.whyNot
+                            : [
+                                alt.whyNotReason ??
+                                  `${selectedTitle} was selected first because it had stronger impact, timing, confidence, and momentum.`,
+                              ]
+                          ).map((reason, reasonIndex) => (
+                            <li key={`${reason}-${reasonIndex}`}>✓ {reason}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                     </div>
                   ))}
                 </div>

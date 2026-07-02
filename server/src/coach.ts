@@ -170,7 +170,10 @@ function buildWakePlan(input: {
     leverCategory: string;
     why: string;
     plan: string[];
-    alternatives: Array<{ title: string; category: string }>;
+    alternatives?: Array<{
+      title: string;
+      category: LeverCategory;
+    }>;
     confidence: number;
   };
   reservationStatus: ReservationStatus;
@@ -215,11 +218,34 @@ function buildWakePlan(input: {
       ],
 
     alternatives:
-      planner.alternatives?.slice(0, 2).map((item) => ({
-        title: item.title,
-        time: "Later today",
-        category: item.category,
-      })) ?? [],
+      planner.alternatives?.slice(0, 2).map((item, index) => {
+        const score = Math.max(
+          60,
+          Math.round(
+            block.predictedImpact * 8 +
+              block.confidence * 0.3
+          )
+        );
+
+        const reasonList = [
+          `${capitalizeFirst(block.leverCategory)} currently has stronger completion momentum.`,
+          "Today's recommendation has a higher predicted impact.",
+          index === 0
+            ? "This will likely become tomorrow's top recommendation."
+            : "This remains an excellent backup option later today.",
+        ];
+
+    return {
+      title: item.title,
+      category: item.category,
+      time: "Later today",
+      whyNotReason: reasonList.join(" "),
+      score,
+      estimatedPriority: index + 2,
+      recommendedTomorrow: index === 0,
+      whyNot: reasonList,
+    };
+  }) ?? [],
 
     timeLeak: {
       title: "Unprotected calendar time",
@@ -582,6 +608,48 @@ export async function refreshWakePlan(userId: string, force = false) {
     },
   });
 
+  const recentCompletedRaw = await prisma.focusBlock.findMany({
+  where: {
+    userId,
+    status: "completed",
+  },
+  orderBy: {
+    endIso: "desc",
+  },
+  take: 5,
+});
+
+const recentFeedback = await prisma.feedback.findMany({
+  where: {
+    userId,
+    focusBlockId: {
+      in: recentCompletedRaw.map((item) => item.id),
+    },
+  },
+});
+
+const needleMoverBlockIds = new Set(
+  recentFeedback
+    .filter((item) => item.needleMover === "yes" || item.needleMover === "somewhat")
+    .map((item) => item.focusBlockId)
+);
+
+const recentCompletedBlocks = recentCompletedRaw.map((item) => ({
+  title: item.title.replace(/^Focus 20:\s*/i, ""),
+  category: item.leverCategory as LeverCategory,
+  completedAtIso: item.endIso.toISOString(),
+  durationMinutes: Math.round(
+    (item.endIso.getTime() - item.startIso.getTime()) / 60000
+  ),
+  needleMover: needleMoverBlockIds.has(item.id),
+}));
+
+const latestCompleted = recentCompletedBlocks[0];
+
+const memoryInsight = latestCompleted
+  ? `Your latest completed focus block was "${latestCompleted.title}" in ${latestCompleted.durationMinutes} minutes. Focus20 is using that recent execution history to keep today's recommendation aligned with your strongest momentum.`
+  : `Focus20 does not have enough completed focus history yet. Completing today's block will improve future coaching and recommendations.`;
+
   const completedDays = new Set(
     weeklyBlocks
       .filter((item) => item.status === "completed")
@@ -793,6 +861,9 @@ export async function refreshWakePlan(userId: string, force = false) {
     xp,
     xpLevel,
     xpNextLevel,
+
+    recentCompletedBlocks,
+    memoryInsight,
 
     predictedSuccess,
     predictedProductivityGain,

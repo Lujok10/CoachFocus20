@@ -109,6 +109,16 @@ todayVsYesterday?: {
   reason: string;
 };
 
+recentCompletedBlocks?: {
+  title: string;
+  category: LeverCategory;
+  completedAtIso: string;
+  durationMinutes: number;
+  needleMover?: boolean;
+}[];
+
+memoryInsight?: string;
+
 }
 
 export interface Lever {
@@ -143,6 +153,12 @@ export interface Alternative {
   whyNotReason?: string;
   paretoScore?: number;
   predictedImpact?: number;
+
+  // AI ranking explanation
+  score?: number;
+  estimatedPriority?: number;
+  recommendedTomorrow?: boolean;
+  whyNot?: string[];
 }
 
 export interface TimeLeak {
