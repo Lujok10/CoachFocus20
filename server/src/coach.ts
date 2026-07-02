@@ -592,6 +592,16 @@ export async function refreshWakePlan(userId: string, force = false) {
       ? 0
       : Math.round((weeklyHighLeverageMinutes / weeklyTotalFocusMinutes) * 100);
 
+
+   const weeklyInsight =
+  realWeeklyParetoShare >= 80
+    ? `Excellent. ${realWeeklyParetoShare}% of your completed focus time this week was spent on high-impact work. You're operating well above the Focus20 target.`
+    : realWeeklyParetoShare >= 60
+      ? `${realWeeklyParetoShare}% of your focus time has been high leverage. You're close to the ideal balance—one or two more strong sessions will push you above the target.`
+      : realWeeklyParetoShare >= 40
+        ? `${realWeeklyParetoShare}% of your focus time has been high leverage. You're making progress, but too much time is still being spent on lower-impact work.`
+        : `Only ${realWeeklyParetoShare}% of your focus time has been high leverage. Focus20 recommends protecting more time for your highest-impact work next week.`;   
+
   const paretoWins = weeklyBlocks.filter(
     (item) => item.status === "completed" && item.predictedImpact >= 8
   ).length;
@@ -634,7 +644,7 @@ const needleMoverBlockIds = new Set(
     .map((item) => item.focusBlockId)
 );
 
-const recentCompletedBlocks = recentCompletedRaw.map((item) => ({
+const recentCompletedBlocksRaw = recentCompletedRaw.map((item) => ({
   title: item.title.replace(/^Focus 20:\s*/i, ""),
   category: item.leverCategory as LeverCategory,
   completedAtIso: item.endIso.toISOString(),
@@ -644,12 +654,89 @@ const recentCompletedBlocks = recentCompletedRaw.map((item) => ({
   needleMover: needleMoverBlockIds.has(item.id),
 }));
 
+const categorySummary = new Map<
+  LeverCategory,
+  {
+    completed: number;
+    total: number;
+  }
+>();
+
+for (const blockItem of weeklyBlocks) {
+  const category = blockItem.leverCategory as LeverCategory;
+
+  const current =
+    categorySummary.get(category) ?? {
+      completed: 0,
+      total: 0,
+    };
+
+  current.total += 1;
+
+  if (blockItem.status === "completed") {
+    current.completed += 1;
+  }
+
+  categorySummary.set(category, current);
+}
+
+const strongestCategory = [...categorySummary.entries()].sort((a, b) => {
+  const aRate = a[1].completed / Math.max(a[1].total, 1);
+  const bRate = b[1].completed / Math.max(b[1].total, 1);
+
+  return bRate - aRate;
+})[0];
+
+const strongestPatternMessage = strongestCategory
+  ? `${capitalizeFirst(strongestCategory[0])} has become your strongest execution category with ${
+      strongestCategory[1].completed
+    } completed session${strongestCategory[1].completed === 1 ? "" : "s"} out of ${
+      strongestCategory[1].total
+    }.`
+  : "Focus20 is still learning your strongest execution category.";
+
+const recentCompletedGroups = new Map<
+  string,
+  {
+    title: string;
+    category: LeverCategory;
+    completedAtIso: string;
+    durationMinutes: number;
+    needleMover?: boolean;
+    count: number;
+  }
+>();
+
+for (const item of recentCompletedBlocksRaw) {
+  const key = `${item.title}-${item.category}`;
+  const existingGroup = recentCompletedGroups.get(key);
+
+  if (existingGroup) {
+    existingGroup.count += 1;
+    existingGroup.durationMinutes += item.durationMinutes;
+    existingGroup.needleMover =
+      existingGroup.needleMover || item.needleMover;
+  } else {
+    recentCompletedGroups.set(key, {
+      ...item,
+      count: 1,
+    });
+  }
+}
+
+const recentCompletedBlocks = Array.from(recentCompletedGroups.values())
+  .map((item) => ({
+    ...item,
+    durationMinutes: Math.round(item.durationMinutes / item.count),
+  }))
+  .slice(0, 3);
+
 const latestCompleted = recentCompletedBlocks[0];
 
 const memoryInsight = latestCompleted
-  ? `Your latest completed focus block was "${latestCompleted.title}" in ${latestCompleted.durationMinutes} minutes. Focus20 is using that recent execution history to keep today's recommendation aligned with your strongest momentum.`
-  : `Focus20 does not have enough completed focus history yet. Completing today's block will improve future coaching and recommendations.`;
-
+  ? `${strongestPatternMessage} Your most recent completed session was "${latestCompleted.title}". Focus20 is reinforcing the pattern that has produced your best results.`
+  : strongestPatternMessage;
+  
   const completedDays = new Set(
     weeklyBlocks
       .filter((item) => item.status === "completed")
@@ -669,27 +756,34 @@ const memoryInsight = latestCompleted
   );
 
   const dailyScoreBreakdown = [
-    {
-      label: "High-impact recommendation",
-      points: Math.min(30, predictedImpact * 3),
-    },
-    {
-      label: `${weeklyProtectedMinutes} protected focus minutes this week`,
-      points: Math.min(25, Math.round(weeklyProtectedMinutes / 12)),
-    },
-    {
-      label: `${paretoWins} high-leverage wins this week`,
-      points: Math.min(20, paretoWins * 5),
-    },
-    {
-      label: `${confidenceDisplayValue}% recommendation confidence`,
-      points: Math.min(15, Math.round(confidenceDisplayValue * 0.15)),
-    },
-    {
-      label: `${capitalizeFirst(leverCategory)} is your current priority lever`,
-      points: 10,
-    },
-  ];
+  {
+    label: "High-impact recommendation",
+    points: Math.min(30, predictedImpact * 3),
+    description: `This task has an estimated impact of ${predictedImpact}/10.`,
+  },
+  {
+    label: "Protected focus time",
+    points: Math.min(25, Math.round(weeklyProtectedMinutes / 12)),
+    description: `${weeklyProtectedMinutes} protected minutes this week.`,
+  },
+  {
+    label: "High-leverage wins",
+    points: Math.min(20, paretoWins * 5),
+    description: `${paretoWins}/${weeklyGoalTarget} weekly wins completed.`,
+  },
+  {
+    label: "Recommendation confidence",
+    points: Math.min(15, Math.round(confidenceDisplayValue * 0.15)),
+    description: `${confidenceDisplayValue}% confidence based on recent completion patterns.`,
+  },
+  {
+    label: "Priority lever",
+    points: 10,
+    description: `${capitalizeFirst(leverCategory)} is currently your strongest focus category.`,
+  },
+];
+
+  
 
   const yesterdayStart = new Date();
   yesterdayStart.setDate(yesterdayStart.getDate() - 1);
@@ -744,15 +838,9 @@ const memoryInsight = latestCompleted
     100
   );
 
-  const todayVsYesterday = {
-    todayScore,
-    yesterdayScore,
-    difference: todayScore - yesterdayScore,
-    reason:
-      todayScore >= yesterdayScore
-        ? `Today is trending higher because you have ${weeklyProtectedMinutes} protected focus minutes and ${paretoWins} high-leverage wins this week.`
-        : "Today is trending lower because yesterday had stronger completed focus activity.",
-  };
+ 
+
+
 
   const nextMilestone =
     weeklyGoalRemaining === 0
@@ -793,17 +881,54 @@ const memoryInsight = latestCompleted
       ? 0
       : Math.round((completedCategoryBlocks / categoryBlocks.length) * 100);
 
-  const categoryLabel = capitalizeFirst(selectedCategory);
+    const categoryLabel = capitalizeFirst(selectedCategory);    
+
+   const todayVsYesterdayReasons = [
+        weeklyProtectedMinutes > yesterdayProtectedMinutes
+          ? `+${weeklyProtectedMinutes - yesterdayProtectedMinutes} more protected minutes than yesterday`
+          : weeklyProtectedMinutes < yesterdayProtectedMinutes
+            ? `${yesterdayProtectedMinutes - weeklyProtectedMinutes} fewer protected minutes than yesterday`
+            : "Protected focus time is unchanged from yesterday",
+
+        paretoWins > 0
+          ? `${paretoWins} high-leverage win${paretoWins === 1 ? "" : "s"} this week`
+          : "No high-leverage wins yet",
+
+        `Recommendation confidence is ${confidenceDisplayValue}% based on your recent completion history`,
+
+        completedCategoryBlocks > 0
+          ? `${completedCategoryBlocks}/${categoryBlocks.length} ${categoryLabel} session${
+              completedCategoryBlocks === 1 ? "" : "s"
+            } completed this week`
+          : `Still building ${categoryLabel} history`,
+      ];  
+
+
+  const todayVsYesterday = {
+    todayScore,
+    yesterdayScore,
+    difference: todayScore - yesterdayScore,
+    reasons: todayVsYesterdayReasons,
+    reason:
+      todayScore >= yesterdayScore
+        ? `Today is trending higher because you have ${weeklyProtectedMinutes} protected focus minutes and ${paretoWins} high-leverage wins this week.`
+        : "Today is trending lower because yesterday had stronger completed focus activity.",
+  };
+
+
 
   const coachInsightMessage =
-    completionRate >= 70
-      ? `${categoryLabel} work is becoming one of your strongest habits. You are converting high-leverage opportunities into completed work, so Focus20 is keeping you on this lever to protect momentum.`
-      : completionRate >= 40
-        ? `${categoryLabel} work is showing useful momentum, but it is not fully locked in yet. Completing this block today would strengthen consistency and improve future recommendations.`
-        : completedCategoryBlocks > 0
-          ? `${categoryLabel} work is important, but execution has been inconsistent this week. This block is a chance to rebuild momentum and turn this category into a stronger lever.`
-          : `${categoryLabel} work is a priority, but Focus20 does not have enough completed examples yet. Completing this block will create a stronger baseline for future coaching.`;
-
+  categoryBlocks.length > 0
+    ? `Over the last 7 days, you completed ${completedCategoryBlocks} ${selectedCategory} session${
+        completedCategoryBlocks === 1 ? "" : "s"
+      } out of ${categoryBlocks.length} scheduled. That gives ${selectedCategory} work a ${completionRate}% completion rate, so Focus20 is keeping this lever active while the pattern is still useful.`
+    : `Focus20 is still learning your ${selectedCategory} execution pattern. Completing today's block will give the coach better data for future recommendations.`;
+  const recommendationReason =
+        completedCategoryBlocks > 0
+          ? `Focus20 selected this because you've completed ${completedCategoryBlocks} ${categoryLabel} session${
+              completedCategoryBlocks === 1 ? "" : "s"
+            } during the last 7 days with a ${completionRate}% completion rate. Combined with ${weeklyProtectedMinutes} protected focus minutes and ${paretoWins} high-leverage wins, this is currently your strongest opportunity.`
+        : `Focus20 selected this because ${categoryLabel} is currently your highest-priority lever and today's protected focus window is the best available opportunity to build momentum.`;
   const wakePlan = buildWakePlan({
     block,
     actionId: action.id,
@@ -814,6 +939,8 @@ const memoryInsight = latestCompleted
     readOnlyCalendar: rules.calendarPermission === "read-only",
   });
 
+  wakePlan.why = recommendationReason;
+
   const xp =
     paretoWins * 50 +
     weeklyNeedleMoverWins * 40 +
@@ -822,6 +949,30 @@ const memoryInsight = latestCompleted
 
   const xpLevel = Math.max(1, Math.floor(xp / 500) + 1);
   const xpNextLevel = xpLevel * 500;
+
+  const xpRemaining = Math.max(0, xpNextLevel - xp);
+
+const estimatedFocusSessions = Math.max(
+  1,
+  Math.ceil(xpRemaining / 90)
+);
+
+const xpForecast = {
+  xpRemaining,
+
+  estimatedFocusSessions,
+
+  message:
+    estimatedFocusSessions === 1
+      ? "Complete one strong focus session to reach the next level."
+      : `Complete about ${estimatedFocusSessions} successful focus sessions to reach Level ${xpLevel + 1}.`,
+
+  fastestPath: [
+    "Complete today's recommended focus block.",
+    "Mark it as a needle mover.",
+    "Finish your weekly high-leverage goal.",
+  ],
+};
 
   const predictedSuccess = Math.min(
     95,
@@ -845,6 +996,7 @@ const memoryInsight = latestCompleted
     streakDays,
 
     weeklyHighLeverageMinutes,
+    weeklyInsight,
     weeklyTotalFocusMinutes,
     weeklyParetoShare: realWeeklyParetoShare,
 
@@ -861,6 +1013,7 @@ const memoryInsight = latestCompleted
     xp,
     xpLevel,
     xpNextLevel,
+    xpForecast,
 
     recentCompletedBlocks,
     memoryInsight,

@@ -47,6 +47,7 @@ export interface WakePlan {
   reservationStatus: "reserved" | "suggested" | "queued" | "cancelled";
   calendarReconnectRequired: boolean;
   readOnlyCalendar: boolean;
+  
 
   impact?: number;
   effortMinutes?: number;
@@ -57,6 +58,7 @@ export interface WakePlan {
   leverName?: string;
   weeklyParetoShare?: number;
   // Analytics & Performance Metrics
+  weeklyInsight?: string;
   paretoWins?: number;
   weeklyTopLever?: LeverCategory;
   weeklyProtectedMinutes?: number;
@@ -71,11 +73,24 @@ export interface WakePlan {
   ignoredTaskTitles?: string[];
   predictedSuccess?: number;
   predictedProductivityGain?: number;
+  predictionFactors?: string[];
+  dailyScoreBreakdown?: {
+  label: string;
+  points: number;
+ description?: string;
+}[];
   weeklyHighLeverageMinutes?: number;
   weeklyTotalFocusMinutes?: number;
   xp?: number;
   xpLevel?: number;
   xpNextLevel?: number;
+
+  xpForecast?: {
+  xpRemaining: number;
+  estimatedFocusSessions: number;
+  message: string;
+  fastestPath: string[];
+};
   coachRecommendation?: string;
   coachInsight?: {
   category: LeverCategory;
@@ -90,10 +105,6 @@ export interface WakePlan {
     reason: string;
   };
 
-dailyScoreBreakdown?: {
-  label: string;
-  points: number;
-}[];
 
 completedFocusBlocksThisWeek?: number;
 weeklyGoalRemaining?: number;
@@ -102,11 +113,13 @@ skipImpact?: {
   projectedScoreDrop: number;
   delayedLevelBy: string;
 };
+
 todayVsYesterday?: {
   todayScore: number;
   yesterdayScore: number;
   difference: number;
   reason: string;
+  reasons?: string[];
 };
 
 recentCompletedBlocks?: {
@@ -115,6 +128,7 @@ recentCompletedBlocks?: {
   completedAtIso: string;
   durationMinutes: number;
   needleMover?: boolean;
+  count?: number;
 }[];
 
 memoryInsight?: string;

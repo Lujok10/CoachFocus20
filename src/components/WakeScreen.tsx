@@ -100,7 +100,7 @@ function DailyScoreCard({
   breakdown,
 }: {
   score: number;
-  breakdown: { label: string; points: number }[];
+  breakdown: { label: string; points: number; description?: string }[];
 }) {
   return (
     <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -139,7 +139,14 @@ function DailyScoreCard({
               className="rounded-xl bg-white p-3"
             >
               <div className="flex justify-between gap-3">
-                <span>{item.label}</span>
+                <div>
+                  <p>{item.label}</p>
+                  {item.description && (
+                    <p className="mt-1 text-xs font-normal text-slate-500">
+                      {item.description}
+                    </p>
+                  )}
+                </div>
                 <span className="font-black text-slate-900">
                   +{item.points}
                 </span>
@@ -251,10 +258,17 @@ function XpCard({
   xp,
   level,
   nextLevel,
+  forecast,
 }: {
   xp: number;
   level: number;
   nextLevel: number;
+  forecast?: {
+    xpRemaining: number;
+    estimatedFocusSessions: number;
+    message: string;
+    fastestPath: string[];
+  };
 }) {
   const progressPercent = clampNumber(
     Math.round((xp / Math.max(nextLevel, 1)) * 100),
@@ -332,7 +346,7 @@ function XpCard({
           </p>
         </div>
 
-        <div className="rounded-2xl bg-slate-50 p-3">
+                <div className="rounded-2xl bg-slate-50 p-3">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
             Earn XP By
           </p>
@@ -343,6 +357,24 @@ function XpCard({
             <li>✓ Maintaining streaks</li>
           </ul>
         </div>
+
+        {forecast && (
+          <div className="rounded-2xl bg-purple-50 p-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-purple-600">
+              Fastest Path
+            </p>
+
+            <p className="mt-1 text-sm font-semibold text-slate-700">
+              {forecast.message}
+            </p>
+
+            <ul className="mt-2 space-y-1 text-sm text-slate-600">
+              {forecast.fastestPath.map((step, index) => (
+                <li key={`${step}-${index}`}>✓ {step}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -445,6 +477,7 @@ function WeeklyParetoCard({
   highLeverageMinutes,
   totalFocusMinutes,
   needleMoverWins,
+  weeklyInsight,
 }: {
   category?: string;
   paretoShare: number;
@@ -453,6 +486,7 @@ function WeeklyParetoCard({
   highLeverageMinutes: number;
   totalFocusMinutes: number;
   needleMoverWins: number;
+    weeklyInsight?: string;
 }) {
   const totalMinutes = Math.max(totalFocusMinutes, protectedMinutes, 1);
 
@@ -538,15 +572,16 @@ function WeeklyParetoCard({
       </p>
 
       <p className="mt-3 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold leading-6 text-emerald-700">
-        {safeShare < 60
-          ? `Your next milestone is reaching 60% high-leverage focus time. You are currently at ${safeShare}%.`
-          : safeShare < 80
-            ? `Excellent progress. You are at ${safeShare}% high-leverage focus time. Aim for 80% consistency this week.`
-            : `Outstanding. You are at ${safeShare}% high-leverage focus time, which means most of your protected time is going toward your highest-return work.`}
-      </p>
-    </div>
-  );
-}
+        {weeklyInsight ??
+          (safeShare < 60
+            ? `Your next milestone is reaching 60% high-leverage focus time. You are currently at ${safeShare}%.`
+            : safeShare < 80
+              ? `Excellent progress. You are at ${safeShare}% high-leverage focus time. Aim for 80% consistency this week.`
+              : `Outstanding. You are at ${safeShare}% high-leverage focus time, which means most of your protected time is going toward your highest-return work.`)}
+              </p>
+            </div>
+          );
+        }
 
 function IfSkippedCard({
     category,
@@ -595,12 +630,14 @@ function TodayVsYesterdayCard({
   yesterdayScore,
   difference,
   reason,
-}: {
-  todayScore: number;
-  yesterdayScore: number;
-  difference: number;
-  reason: string;
-}) {
+  reasons,
+  }: {
+    todayScore: number;
+    yesterdayScore: number;
+    difference: number;
+    reason: string;
+    reasons?: string[];
+  }) {
   const isUp = difference >= 0;
 
   return (
@@ -636,11 +673,22 @@ function TodayVsYesterdayCard({
             : "bg-amber-50 text-amber-700"
         }`}
       >
-        {isUp ? "↑" : "↓"} {Math.abs(difference)} points. {reason}
-      </div>
-    </div>
-  );
-}
+       <p>
+  {isUp ? "↑" : "↓"} {Math.abs(difference)} points.
+      </p>
+      {reasons && reasons.length > 0 ? (
+        <ul className="mt-3 space-y-2">
+          {reasons.map((item, index) => (
+            <li key={`${item}-${index}`}>✓ {item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2">{reason}</p>
+      )}
+            </div>
+          </div>
+        );
+      }
 
 function MemoryInsightCard({
   insight,
@@ -653,6 +701,7 @@ function MemoryInsightCard({
     completedAtIso: string;
     durationMinutes: number;
     needleMover?: boolean;
+    count?: number;
   }[];
 }) {
   if (!insight && (!recentBlocks || recentBlocks.length === 0)) return null;
@@ -681,8 +730,9 @@ function MemoryInsightCard({
               </p>
 
               <p className="mt-1 text-xs font-semibold text-slate-500">
-                {block.category} • {block.durationMinutes} min
-              </p>
+              {block.category} • avg {block.durationMinutes} min
+              {block.count && block.count > 1 ? ` • completed ${block.count} times` : ""}
+            </p>
             </div>
           ))}
         </div>
@@ -798,23 +848,24 @@ export function WakeScreen({
   const predictedSuccess = wakePlan?.predictedSuccess ?? 70;
   const predictedGain = wakePlan?.predictedProductivityGain ?? 10;
 
-  const predictionFactors = [
-  weeklyProtectedMinutes >= 120
-    ? `✓ ${weeklyProtectedMinutes} protected focus minutes this week`
-    : `⚠ Only ${weeklyProtectedMinutes} protected focus minutes this week`,
+ const predictionFactors =
+  wakePlan?.predictionFactors ?? [
+    weeklyProtectedMinutes >= 120
+      ? `✓ ${weeklyProtectedMinutes} protected focus minutes this week`
+      : `⚠ Only ${weeklyProtectedMinutes} protected focus minutes this week`,
 
-  weeklyWins >= 3
-    ? `✓ ${weeklyWins} high-leverage wins this week`
-    : `⚠ ${Math.max(0, weeklyGoalTarget - weeklyWins)} more wins needed for weekly goal`,
+    weeklyWins >= 3
+      ? `✓ ${weeklyWins} high-leverage wins this week`
+      : `⚠ ${Math.max(0, weeklyGoalTarget - weeklyWins)} more wins needed for weekly goal`,
 
-  selectedCategory
-    ? `✓ ${selectedCategory} is currently your strongest lever`
-    : "⚠ Focus20 is still learning your strongest category",
+    selectedCategory
+      ? `✓ ${selectedCategory} is currently your strongest lever`
+      : "⚠ Focus20 is still learning your strongest category",
 
-  confidenceDisplay >= 75
-    ? `✓ Recommendation confidence is strong at ${confidenceDisplay}%`
-    : `⚠ Confidence is ${confidenceDisplay}%; completing today’s block will improve future predictions`,
-];
+    confidenceDisplay >= 75
+      ? `✓ Recommendation confidence is strong at ${confidenceDisplay}%`
+      : `⚠ Confidence is ${confidenceDisplay}%; completing today’s block will improve future predictions`,
+  ];
 
   const dailyScoreBreakdown =
     wakePlan?.dailyScoreBreakdown ?? [
@@ -966,10 +1017,11 @@ export function WakeScreen({
             <NeedleMoverCard wins={needleMoverWins} />
 
             <XpCard
-              xp={xp}
-              level={xpLevel}
-              nextLevel={xpNextLevel}
-            />
+            xp={xp}
+            level={xpLevel}
+            nextLevel={xpNextLevel}
+            forecast={wakePlan.xpForecast}
+          />
 
             {wakePlan.todayVsYesterday && (
               <TodayVsYesterdayCard
@@ -977,6 +1029,7 @@ export function WakeScreen({
                 yesterdayScore={wakePlan.todayVsYesterday.yesterdayScore}
                 difference={wakePlan.todayVsYesterday.difference}
                 reason={wakePlan.todayVsYesterday.reason}
+                reasons={wakePlan.todayVsYesterday.reasons}
               />
             )}
 
@@ -1067,6 +1120,7 @@ export function WakeScreen({
               highLeverageMinutes={weeklyHighLeverageMinutes}
               totalFocusMinutes={weeklyTotalFocusMinutes}
               needleMoverWins={needleMoverWins}
+              weeklyInsight={wakePlan.weeklyInsight}
             />
           </>
         )}
