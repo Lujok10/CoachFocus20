@@ -54,7 +54,13 @@ export async function transcribeAndAnalyzeAudio(filePath: string): Promise<Voice
   }
 
   const transcription = await openai.audio.transcriptions.create({
-    file: fs.createReadStream(filePath),
+    file: await OpenAI.toFile(
+  fs.createReadStream(filePath),
+        "focus20-checkin.webm",
+        {
+          type: "audio/webm",
+        }
+      ),
     model: "whisper-1",
   });
 
