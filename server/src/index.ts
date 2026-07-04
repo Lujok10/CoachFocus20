@@ -5,7 +5,7 @@ import express from "express";
 import { clerkMiddleware } from "@clerk/express";
 import multer from "multer";
 import fs from "fs";
-
+import os from "os";
 import { prisma, ensureDemoUser, ensureUser } from "./db";
 import { validateEnv } from "./env";
 import { getRequestUserId } from "./auth";
@@ -137,11 +137,12 @@ const voiceLimiter = rateLimit({
 });
 
 const upload = multer({
-  dest: "uploads/",
+  dest: os.tmpdir(),
   limits: {
     fileSize: 10 * 1024 * 1024,
     files: 1,
   },
+
   fileFilter: (_req, file, callback) => {
     if (!file.mimetype.startsWith("audio/")) {
       callback(new Error("Only audio files are allowed."));
@@ -384,9 +385,20 @@ app.post(
 
       fs.unlink(req.file.path, () => {});
       res.json({ ok: true, analysis, checkin });
-    } catch (error) {
-      if (req.file?.path) fs.unlink(req.file.path, () => {});
-      next(error);
+        } catch (error) {
+      console.error("VOICE CHECKIN ERROR:", error);
+
+      if (req.file?.path) {
+        fs.unlink(req.file.path, () => {});
+      }
+
+      res.status(500).json({
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Voice upload failed.",
+      });
     }
   }
 );
