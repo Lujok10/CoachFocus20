@@ -374,7 +374,17 @@ app.post(
         return;
       }
 
-      const analysis = await transcribeAndAnalyzeAudio(req.file.path);
+      const analysis = await transcribeAndAnalyzeAudio(
+        req.file.path,
+        req.file.mimetype,
+        req.file.originalname || "focus20-checkin.webm"
+      );
+      console.log("VOICE FILE:", {
+        path: req.file.path,
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        filename: req.file.filename,
+      });
 
       const checkin = await recordCheckin({
         focusBlockId,

@@ -48,19 +48,27 @@ function fallbackAnalyze(transcript: string): VoiceAnalysis {
   };
 }
 
-export async function transcribeAndAnalyzeAudio(filePath: string): Promise<VoiceAnalysis> {
+export async function transcribeAndAnalyzeAudio(
+  filePath: string,
+  mimeType = "audio/webm",
+  originalName = "focus20-checkin.webm"
+): Promise<VoiceAnalysis> {
   if (!openai) {
-    return fallbackAnalyze("Voice note received. OpenAI transcription is not configured.");
+    return fallbackAnalyze(
+      "Voice note received. OpenAI transcription is not configured."
+    );
   }
+
+  const fileBuffer = await fs.promises.readFile(filePath);
 
   const transcription = await openai.audio.transcriptions.create({
     file: await OpenAI.toFile(
-  fs.createReadStream(filePath),
-        "focus20-checkin.webm",
-        {
-          type: "audio/webm",
-        }
-      ),
+      fileBuffer,
+      originalName || "focus20-checkin.webm",
+      {
+        type: mimeType || "audio/webm",
+      }
+    ),
     model: "whisper-1",
   });
 
@@ -69,6 +77,9 @@ export async function transcribeAndAnalyzeAudio(filePath: string): Promise<Voice
   if (!transcript) {
     return fallbackAnalyze("No clear speech detected.");
   }
+
+  // ...keep the rest of your existing function unchanged...
+
 
   try {
     const response = await openai.responses.create({
