@@ -19,6 +19,12 @@ type WeeklyInsights = {
     totalBlocks: number;
     completedBlocks: number;
     missedBlocks: number;
+    focusHealthScore?: number;
+    effectivenessBreakdown?: Array<{
+      label: string;
+      value: string;
+      points: number;
+    }>;
   };
   topLevers: Array<{
     category: string;
@@ -30,11 +36,96 @@ type WeeklyInsights = {
     startIso: string;
     reason: string;
   }>;
+
+  trend?: Array<{
+  day: string;
+  protectedMinutes: number;
+  completedMinutes: number;
+}>;
   shareText: string;
 };
 
 function formatCategory(category: string) {
   return category.charAt(0).toUpperCase() + category.slice(1);
+}
+
+function TrendChart({
+  trend,
+}: {
+  trend?: Array<{
+    day: string;
+    protectedMinutes: number;
+    completedMinutes: number;
+  }>;
+}) {
+  if (!trend || trend.length === 0) return null;
+
+  const maxMinutes = Math.max(
+    1,
+    ...trend.map((item) =>
+      Math.max(item.protectedMinutes, item.completedMinutes)
+    )
+  );
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-2xl border border-slate-200 bg-white p-5"
+    >
+      <div className="mb-4 flex items-center gap-2">
+        <Zap className="h-4 w-4 text-emerald-600" />
+        <h2 className="text-sm font-semibold text-slate-800">
+          7-Day Focus Trend
+        </h2>
+      </div>
+
+      <div className="space-y-3">
+        {trend.map((item) => {
+          const protectedWidth = Math.round(
+            (item.protectedMinutes / maxMinutes) * 100
+          );
+
+          const completedWidth = Math.round(
+            (item.completedMinutes / maxMinutes) * 100
+          );
+
+          return (
+            <div key={item.day}>
+              <div className="mb-1 flex items-center justify-between">
+                <p className="text-xs font-bold text-slate-500">
+                  {item.day}
+                </p>
+
+                <p className="text-xs text-slate-500">
+                  {item.completedMinutes}/{item.protectedMinutes} min
+                </p>
+              </div>
+
+              <div className="h-2 rounded-full bg-slate-100">
+                <div
+                  className="h-2 rounded-full bg-emerald-500"
+                  style={{ width: `${protectedWidth}%` }}
+                />
+              </div>
+
+              <div className="mt-1 h-2 rounded-full bg-slate-100">
+                <div
+                  className="h-2 rounded-full bg-blue-500"
+                  style={{ width: `${completedWidth}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 flex gap-4 text-xs text-slate-500">
+        <span>🟢 Protected</span>
+        <span>🔵 Completed</span>
+      </div>
+    </motion.section>
+  );
 }
 
 export function Insights({ authReady }: { authReady: boolean }) {
@@ -45,36 +136,37 @@ export function Insights({ authReady }: { authReady: boolean }) {
   const [recoveryMessage, setRecoveryMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
 
- async function loadInsights() {
-  setIsLoading(true);
+  async function loadInsights() {
+    setIsLoading(true);
 
-  try {
-    setError(null);
+    try {
+      setError(null);
 
-    const weeklyInsights = await apiWeeklyInsights();
-    setInsights(weeklyInsights);
-  } catch {
-    setError("Insights are temporarily unavailable.");
-    setInsights(null);
+      const weeklyInsights = await apiWeeklyInsights();
+      setInsights(weeklyInsights as WeeklyInsights);
+    } catch {
+      setError("Insights are temporarily unavailable.");
+      setInsights(null);
+    }
+
+    try {
+      const suggestion = await apiRecoverySuggestion();
+      setRecovery(suggestion);
+    } catch {
+      setRecovery(null);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
-  try {
-    const suggestion = await apiRecoverySuggestion();
-    setRecovery(suggestion);
-  } catch {
-    setRecovery(null);
-  } finally {
-    setIsLoading(false);
-  }
-}
-
-useEffect(() => {
-  if (!authReady) return;
+  useEffect(() => {
+    if (!authReady) return;
 
     loadInsights();
   }, [authReady]);
-    async function handleShare() {
-      if (!insights?.shareText) return;
+
+  async function handleShare() {
+    if (!insights?.shareText) return;
 
     try {
       await navigator.clipboard.writeText(insights.shareText);
@@ -91,9 +183,9 @@ useEffect(() => {
 
     try {
       const result = (await apiAutoRescheduleMissedWork()) as {
-            rescheduled?: boolean;
-            reason?: string;
-          };
+        rescheduled?: boolean;
+        reason?: string;
+      };
 
       if (result.rescheduled) {
         setRecoveryMessage("Recovery block scheduled.");
@@ -134,15 +226,7 @@ useEffect(() => {
     );
   }
 
-  const effectivenessScore =
-    insights.summary.totalBlocks === 0
-      ? 0
-      : Math.round(
-          (insights.summary.completionRate / 100) *
-            Math.min(100, insights.summary.needleMoverWins * 25)
-        );
-
-  const focusHealthScore = Math.min(
+  const fallbackFocusHealthScore = Math.min(
     100,
     Math.round(
       insights.summary.completionRate * 0.6 +
@@ -152,6 +236,35 @@ useEffect(() => {
           20
     )
   );
+
+  const focusHealthScore =
+    insights.summary.focusHealthScore ?? fallbackFocusHealthScore;
+
+  const effectivenessScore = focusHealthScore;
+
+  const effectivenessBreakdown =
+    insights.summary.effectivenessBreakdown ?? [
+      {
+        label: "Completion rate",
+        value: `${insights.summary.completionRate}%`,
+        points: Math.round(insights.summary.completionRate * 0.4),
+      },
+      {
+        label: "Protected focus time",
+        value: `${insights.summary.protectedMinutes} min`,
+        points: Math.min(20, Math.round(insights.summary.protectedMinutes / 15)),
+      },
+      {
+        label: "Completed focus time",
+        value: `${insights.summary.completedMinutes} min`,
+        points: Math.min(20, Math.round(insights.summary.completedMinutes / 12)),
+      },
+      {
+        label: "Needle movers",
+        value: `${insights.summary.needleMoverWins} wins`,
+        points: Math.min(20, insights.summary.needleMoverWins * 4),
+      },
+    ];
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
@@ -208,41 +321,59 @@ useEffect(() => {
         )}
 
         <motion.section
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="rounded-2xl border border-slate-200 bg-white p-5"
-              >
-                <div className="mb-4 flex items-center gap-2">
-                  <Target className="h-4 w-4 text-emerald-600" />
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl border border-slate-200 bg-white p-5"
+        >
+          <div className="mb-4 flex items-center gap-2">
+            <Target className="h-4 w-4 text-emerald-600" />
+            <h2 className="text-sm font-semibold text-slate-800">
+              Focus Health Score
+            </h2>
+          </div>
 
-                  <h2 className="text-sm font-semibold text-slate-800">
-                    Focus Health Score
-                  </h2>
-                </div>
+          <div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-4xl font-black text-slate-900">
+                {focusHealthScore}/100
+              </p>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-4xl font-bold text-slate-900">
-                      {focusHealthScore}/100
-                    </p>
+              <p className="mt-1 text-sm text-slate-500">
+                Overall focus performance
+              </p>
+            </div>
 
-                    <p className="mt-1 text-sm text-slate-500">
-                      Overall focus performance
-                    </p>
-                  </div>
+            <div className="text-right">
+              <p className="text-sm font-semibold text-slate-600">
+                Completion: {insights.summary.completionRate}%
+              </p>
 
-                  <div className="text-right">
-                    <p className="text-sm text-slate-500">
-                      Completion: {insights.summary.completionRate}%
-                    </p>
+              <p className="text-sm font-semibold text-slate-600">
+                Wins: {insights.summary.needleMoverWins}
+              </p>
+            </div>
+          </div>
 
-                    <p className="text-sm text-slate-500">
-                      Wins: {insights.summary.needleMoverWins}
-                    </p>
-                  </div>
-                </div>
-              </motion.section>
+          <div className="mt-4 h-3 rounded-full bg-slate-100">
+            <div
+              className="h-3 rounded-full bg-emerald-500"
+              style={{
+                width: `${Math.min(100, Math.max(0, focusHealthScore))}%`,
+              }}
+            />
+          </div>
 
+          <p className="mt-3 text-sm font-medium text-slate-600">
+            {focusHealthScore >= 85
+              ? "Excellent focus health. You are converting most protected time into meaningful progress."
+              : focusHealthScore >= 65
+                ? "Good momentum. Your next opportunity is improving completion consistency."
+                : "Focus health needs attention. Protect fewer, higher-impact blocks this week."}
+          </p>
+        </div>
+        </motion.section>
+        <TrendChart trend={insights.trend} />
         <motion.section
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -261,41 +392,60 @@ useEffect(() => {
               {copyStatus || "Copy Summary"}
             </button>
           </div>
-
           <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-xl bg-emerald-50 p-3">
-              <p className="text-2xl font-bold text-emerald-700">
+            <div className="rounded-xl bg-emerald-50 p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-emerald-600">
+                🛡 Protected
+              </p>
+
+              <p className="mt-2 text-3xl font-black text-emerald-700">
                 {insights.summary.protectedMinutes}
               </p>
-              <p className="mt-0.5 text-xs text-emerald-600">
-                Protected minutes
+
+              <p className="mt-1 text-xs font-semibold text-emerald-600">
+                minutes planned
               </p>
             </div>
 
-            <div className="rounded-xl bg-blue-50 p-3">
-              <p className="text-2xl font-bold text-blue-700">
+            <div className="rounded-xl bg-blue-50 p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-blue-600">
+                ✅ Completed
+              </p>
+
+              <p className="mt-2 text-3xl font-black text-blue-700">
                 {insights.summary.completedMinutes}
               </p>
-              <p className="mt-0.5 text-xs text-blue-600">
-                Completed minutes
+
+              <p className="mt-1 text-xs font-semibold text-blue-600">
+                minutes finished
               </p>
             </div>
 
-            <div className="rounded-xl bg-violet-50 p-3">
-              <p className="text-2xl font-bold text-violet-700">
+            <div className="rounded-xl bg-violet-50 p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-violet-600">
+                📈 Completion
+              </p>
+
+              <p className="mt-2 text-3xl font-black text-violet-700">
                 {insights.summary.completionRate}%
               </p>
-              <p className="mt-0.5 text-xs text-violet-600">
-                Completion rate
+
+              <p className="mt-1 text-xs font-semibold text-violet-600">
+                protected work completed
               </p>
             </div>
 
-            <div className="rounded-xl bg-amber-50 p-3">
-              <p className="text-2xl font-bold text-amber-700">
+            <div className="rounded-xl bg-amber-50 p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-amber-600">
+                🚀 Needle Movers
+              </p>
+
+              <p className="mt-2 text-3xl font-black text-amber-700">
                 {insights.summary.needleMoverWins}
               </p>
-              <p className="mt-0.5 text-xs text-amber-600">
-                Needle-mover wins
+
+              <p className="mt-1 text-xs font-semibold text-amber-600">
+                high-value wins
               </p>
             </div>
           </div>
@@ -320,25 +470,45 @@ useEffect(() => {
             </p>
           ) : (
             <div className="space-y-3">
-              {insights.topLevers.map((lever, index) => (
-                <div
-                  key={lever.category}
-                  className="flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs font-medium text-slate-600">
-                      {index + 1}
-                    </span>
-                    <span className="text-sm text-slate-700">
-                      {formatCategory(lever.category)}
-                    </span>
-                  </div>
+              {insights.topLevers.map((lever, index) => {
+                const medal = index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉";
+                const label = index === 0 ? "Strongest lever" : "Supporting lever";
+                const progress = Math.min(100, Math.max(8, lever.score * 2));
 
-                  <span className="text-xs font-medium text-slate-500">
-                    Score {lever.score}
-                  </span>
-                </div>
-              ))}
+                return (
+                  <div
+                    key={lever.category}
+                    className="rounded-xl bg-slate-50 p-4"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{medal}</span>
+
+                        <div>
+                          <p className="text-base font-black text-slate-900">
+                            {formatCategory(lever.category)}
+                          </p>
+
+                          <p className="text-xs font-semibold text-slate-500">
+                            {label}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-full bg-violet-100 px-3 py-1 text-xs font-black text-violet-700">
+                        {lever.score} pts
+                      </div>
+                    </div>
+
+                    <div className="mt-4 h-3 rounded-full bg-white">
+                      <div
+                        className="h-3 rounded-full bg-violet-500"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </motion.section>
@@ -366,6 +536,7 @@ useEffect(() => {
                   <p className="text-sm font-medium text-amber-900">
                     {leak.title}
                   </p>
+
                   <p className="mt-1 text-xs text-amber-700">
                     {leak.reason} • {formatCategory(leak.category)}
                   </p>
@@ -375,36 +546,67 @@ useEffect(() => {
           </motion.section>
         )}
 
-       <motion.section
+        <motion.section
+
+        
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
           className="rounded-2xl border border-slate-200 bg-white p-5"
         >
-          <div className="mb-4 flex items-center gap-2">
-            <Clock className="h-4 w-4 text-blue-600" />
-            <h2 className="text-sm font-semibold text-slate-800">
-              Weekly Summary
-            </h2>
+          <div className="space-y-4">
+            <div className="rounded-xl bg-emerald-50 p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
+                🤖 AI Coach
+              </p>
+
+              <p className="mt-2 text-sm leading-6 text-emerald-900">
+                {insights.shareText}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  Biggest Win
+                </p>
+
+                <p className="mt-2 text-sm font-semibold text-slate-800">
+                  {insights.summary.needleMoverWins} high-value win
+                  {insights.summary.needleMoverWins === 1 ? "" : "s"}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  Opportunity
+                </p>
+
+                <p className="mt-2 text-sm font-semibold text-slate-800">
+                  Improve completion from {insights.summary.completionRate}% to 85%.
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  Next Goal
+                </p>
+
+                <p className="mt-2 text-sm font-semibold text-slate-800">
+                  Complete another{" "}
+                  {Math.max(
+                    1,
+                    Math.round(
+                      (insights.summary.protectedMinutes -
+                        insights.summary.completedMinutes) / 60
+                    )
+                  )}{" "}
+                  hour of protected work.
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div className="mb-4 rounded-xl bg-emerald-50 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-              AI Coach Summary
-            </p>
-
-            <p className="mt-1 text-sm text-emerald-800">
-              {focusHealthScore >= 80
-                ? "Excellent week. Continue protecting high-impact focus blocks."
-                : focusHealthScore >= 60
-                  ? "Good momentum. Increase completion consistency."
-                  : "Focus system needs attention. Prioritize fewer but higher-impact blocks."}
-            </p>
-          </div>
-
-          <p className="text-sm leading-6 text-slate-600">
-            {insights.shareText}
-          </p>
         </motion.section>
 
         <motion.section
@@ -423,8 +625,10 @@ useEffect(() => {
                 <h2 className="text-sm font-semibold text-slate-800">
                   Effectiveness Score
                 </h2>
+
                 <p className="text-xs text-slate-500">
-                  Completion rate × needle-mover wins
+                  Based on completion, protected time, completed time and needle
+                  movers
                 </p>
               </div>
             </div>
@@ -433,6 +637,41 @@ useEffect(() => {
               {effectivenessScore}
             </span>
           </div>
+
+          <div className="border-t border-slate-100 px-5 py-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {effectivenessBreakdown.map((item) => (
+              <div
+                key={item.label}
+                className="rounded-xl bg-slate-50 p-3"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-slate-800">
+                      {item.label}
+                    </p>
+
+                    <p className="mt-1 text-xs font-medium text-slate-500">
+                      {item.value}
+                    </p>
+                  </div>
+
+                  <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-black text-emerald-700">
+                    +{item.points}
+                  </span>
+                </div>
+                <div className="mt-3 h-2 rounded-full bg-white">
+                <div
+                  className="h-2 rounded-full bg-emerald-500"
+                  style={{
+                    width: `${Math.min(100, Math.max(0, item.points * 5))}%`,
+                  }}
+                />
+              </div>
+              </div>
+            ))}
+          </div>
+        </div>
         </motion.section>
       </div>
     </div>

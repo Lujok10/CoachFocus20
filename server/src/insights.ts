@@ -1,10 +1,8 @@
 import { prisma } from "./db";
 
-function startOfWeek() {
-  const now = new Date();
-  const start = new Date(now);
-
-  start.setDate(now.getDate() - now.getDay());
+function rollingSevenDaysStart() {
+  const start = new Date();
+  start.setDate(start.getDate() - 7);
   start.setHours(0, 0, 0, 0);
 
   return start;
@@ -21,7 +19,7 @@ function minutesBetween(start?: Date | null, end?: Date | null) {
 
 export async function getWeeklyInsights(userId: string) {
   const now = new Date();
-  const weekStart = startOfWeek();
+  const weekStart = rollingSevenDaysStart();
 
   const [blocks, tasks, feedback] = await Promise.all([
     prisma.focusBlock.findMany({
@@ -105,6 +103,7 @@ export async function getWeeklyInsights(userId: string) {
     );
 
   const totalItems = blocks.length + tasks.length;
+
   const completedItems =
     completedBlocks.length + completedTasks.length;
 
@@ -114,8 +113,58 @@ export async function getWeeklyInsights(userId: string) {
       : Math.round((completedItems / totalItems) * 100);
 
   const needleMoverWins = feedback.filter(
-    (item) => item.needleMover === "yes"
+    (item) =>
+      item.needleMover === "yes" ||
+      item.needleMover === "somewhat"
   ).length;
+
+  const protectedMinutesScore = Math.min(
+    20,
+    Math.round(protectedMinutes / 15)
+  );
+
+  const completionRateScore = Math.round(completionRate * 0.4);
+
+  const needleMoverScore = Math.min(
+    20,
+    needleMoverWins * 4
+  );
+
+  const completedMinutesScore = Math.min(
+    20,
+    Math.round(completedMinutes / 12)
+  );
+
+  const focusHealthScore = Math.min(
+    100,
+    completionRateScore +
+      protectedMinutesScore +
+      needleMoverScore +
+      completedMinutesScore
+  );
+
+  const effectivenessBreakdown = [
+    {
+      label: "Completion rate",
+      value: `${completionRate}%`,
+      points: completionRateScore,
+    },
+    {
+      label: "Protected focus time",
+      value: `${protectedMinutes} min`,
+      points: protectedMinutesScore,
+    },
+    {
+      label: "Completed focus time",
+      value: `${completedMinutes} min`,
+      points: completedMinutesScore,
+    },
+    {
+      label: "Needle movers",
+      value: `${needleMoverWins} wins`,
+      points: needleMoverScore,
+    },
+  ];
 
   const leverScores = new Map<string, number>();
 
@@ -144,16 +193,15 @@ export async function getWeeklyInsights(userId: string) {
   }
 
   for (const item of feedback) {
-    const category =
-      item.focusBlock?.leverCategory ?? "admin";
-
+    const category = item.focusBlock?.leverCategory ?? "admin";
     const current = leverScores.get(category) ?? 0;
 
     let score = 0;
 
     if (
       item.result === "crushed" &&
-      item.needleMover === "yes"
+      (item.needleMover === "yes" ||
+        item.needleMover === "somewhat")
     ) {
       score = 3;
     } else if (item.result === "crushed") {
@@ -191,58 +239,60 @@ export async function getWeeklyInsights(userId: string) {
     })),
   ].slice(0, 3);
 
-
   const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-const trend = Array.from({ length: 7 }).map((_, index) => {
-  const day = new Date(weekStart);
-  day.setDate(weekStart.getDate() + index);
+  const trend = Array.from({ length: 7 }).map((_, index) => {
+    const day = new Date(weekStart);
+    day.setDate(weekStart.getDate() + index);
 
-  const nextDay = new Date(day);
-  nextDay.setDate(day.getDate() + 1);
+    const nextDay = new Date(day);
+    nextDay.setDate(day.getDate() + 1);
 
-  const dayBlocks = blocks.filter(
-    (block) => block.startIso >= day && block.startIso < nextDay
-  );
-
-  const dayTasks = tasks.filter(
-    (task) => task.startIso && task.startIso >= day && task.startIso < nextDay
-  );
-
-  const protectedMinutes =
-    dayBlocks.reduce(
-      (total, block) =>
-        total + minutesBetween(block.startIso, block.endIso),
-      0
-    ) +
-    dayTasks.reduce(
-      (total, task) =>
-        total + minutesBetween(task.startIso, task.endIso),
-      0
+    const dayBlocks = blocks.filter(
+      (block) => block.startIso >= day && block.startIso < nextDay
     );
 
-  const completedMinutes =
-    dayBlocks
-      .filter((block) => block.status === "completed")
-      .reduce(
+    const dayTasks = tasks.filter(
+      (task) =>
+        task.startIso &&
+        task.startIso >= day &&
+        task.startIso < nextDay
+    );
+
+    const dayProtectedMinutes =
+      dayBlocks.reduce(
         (total, block) =>
           total + minutesBetween(block.startIso, block.endIso),
         0
       ) +
-    dayTasks
-      .filter((task) => task.status === "completed")
-      .reduce(
+      dayTasks.reduce(
         (total, task) =>
           total + minutesBetween(task.startIso, task.endIso),
         0
       );
 
-  return {
-    day: dayLabels[day.getDay()],
-    protectedMinutes,
-    completedMinutes,
-  };
-});
+    const dayCompletedMinutes =
+      dayBlocks
+        .filter((block) => block.status === "completed")
+        .reduce(
+          (total, block) =>
+            total + minutesBetween(block.startIso, block.endIso),
+          0
+        ) +
+      dayTasks
+        .filter((task) => task.status === "completed")
+        .reduce(
+          (total, task) =>
+            total + minutesBetween(task.startIso, task.endIso),
+          0
+        );
+
+    return {
+      day: dayLabels[day.getDay()],
+      protectedMinutes: dayProtectedMinutes,
+      completedMinutes: dayCompletedMinutes,
+    };
+  });
 
   return {
     weekStart,
@@ -255,10 +305,19 @@ const trend = Array.from({ length: 7 }).map((_, index) => {
       totalBlocks: totalItems,
       completedBlocks: completedItems,
       missedBlocks: missedBlocks.length + missedTasks.length,
+      focusHealthScore,
+      effectivenessBreakdown,
     },
     topLevers,
     timeLeaks,
     trend,
-    shareText: `This week I protected ${protectedMinutes} minutes for high-leverage work and completed ${completedMinutes} minutes. Completion rate: ${completionRate}%.`,
+    shareText:
+      completionRate >= 80
+        ? `Excellent week. You protected ${protectedMinutes} minutes and completed ${completedMinutes} minutes with an ${completionRate}% completion rate. Your strongest lever was ${
+            topLevers[0]?.category ?? "focus"
+          }.`
+        : completionRate >= 60
+          ? `Strong week. You protected ${protectedMinutes} minutes and completed ${completedMinutes} minutes. Your next opportunity is improving completion from ${completionRate}% to 80%.`
+          : `Focus system needs attention. You protected ${protectedMinutes} minutes but completed ${completedMinutes} minutes. Prioritize fewer, higher-impact blocks next week.`,
   };
 }

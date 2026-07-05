@@ -192,6 +192,12 @@ export async function apiWeeklyInsights() {
       totalBlocks: number;
       completedBlocks: number;
       missedBlocks: number;
+      focusHealthScore: number;
+      effectivenessBreakdown: Array<{
+        label: string;
+        value: string;
+        points: number;
+      }>;
     };
     topLevers: Array<{ category: string; score: number }>;
     timeLeaks: Array<{
