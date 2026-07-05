@@ -25,9 +25,18 @@ export function VoiceCheckinRecorder({
 
     chunksRef.current = [];
 
-    const recorder = new MediaRecorder(stream, {
-      mimeType: "audio/webm",
-    });
+    const supportedMimeType =
+      MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/webm")
+          ? "audio/webm"
+          : "";
+
+const recorder = supportedMimeType
+  ? new MediaRecorder(stream, {
+      mimeType: supportedMimeType,
+    })
+  : new MediaRecorder(stream);
 
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) {
@@ -39,8 +48,16 @@ export function VoiceCheckinRecorder({
       stream.getTracks().forEach((track) => track.stop());
 
       const audioBlob = new Blob(chunksRef.current, {
-        type: "audio/webm",
-      });
+          type: recorder.mimeType || "audio/webm",
+        });
+
+        console.log("VOICE BLOB", {
+          mimeType: recorder.mimeType,
+          blobType: audioBlob.type,
+          size: audioBlob.size,
+        });
+
+     
 
       setIsUploading(true);
 
