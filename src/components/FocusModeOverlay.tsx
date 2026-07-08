@@ -5,6 +5,8 @@ import { WakePlan } from "../types";
 import { showLocalNotification } from "../services/pwaNotifications";
 import { VoiceCheckinRecorder } from "./VoiceCheckinRecorder";
 import { apiTrackEvent } from "../services/apiClient";
+import { playTaskCompletedSound } from "../services/sounds";
+import confetti from "canvas-confetti";
 
 interface FocusModeOverlayProps {
   wakePlan: WakePlan;
@@ -191,39 +193,54 @@ export function FocusModeOverlay({
       )
     );
 
-    const executionRecord = {
-      focusBlockId: wakePlan.block.id,
-      title: wakePlan.lever?.title ?? wakePlan.block.title,
-      category: wakePlan.lever?.category ?? wakePlan.block.leverCategory,
-      startedAt,
-      completedAt,
-      actualDurationMinutes,
-      plannedDurationMinutes: durationMinutes,
-      status: "completed",
-      paretoScore: wakePlan.paretoScore ?? null,
-      predictedImpact:
-        wakePlan.impact ??
-        wakePlan.lever?.predictedImpact ??
-        wakePlan.block.predictedImpact,
-    };
+   const executionRecord = {
+  focusBlockId: wakePlan.block.id,
+  title: wakePlan.lever?.title ?? wakePlan.block.title,
+  category: wakePlan.lever?.category ?? wakePlan.block.leverCategory,
+  startedAt,
+  completedAt,
+  actualDurationMinutes,
+  plannedDurationMinutes: durationMinutes,
+  status: "completed",
+  paretoScore: wakePlan.paretoScore ?? null,
+  predictedImpact:
+    wakePlan.impact ??
+    wakePlan.lever?.predictedImpact ??
+    wakePlan.block.predictedImpact,
+};
 
-    localStorage.setItem(executionStorageKey, JSON.stringify(executionRecord));
-    localStorage.removeItem(timerStorageKey);
+localStorage.setItem(
+  executionStorageKey,
+  JSON.stringify(executionRecord)
+);
+localStorage.removeItem(timerStorageKey);
 
-    try {
-      await apiTrackEvent("block_completed", executionRecord);
-    } catch {
-      // Keep local record even if analytics fails
-    }
+try {
+  await apiTrackEvent(
+    "block_completed",
+    executionRecord
+  );
 
-    setIsSavingCompletion(false);
-  };
+  playTaskCompletedSound();
 
-  const handleComplete = async () => {
-    await saveCompletion();
-    onComplete();
-  };
+  confetti({
+    particleCount: 120,
+    spread: 90,
+    origin: {
+      y: 0.7,
+    },
+  });
+} catch {
+  // Keep local record even if analytics fails
+}
 
+setIsSavingCompletion(false);
+};
+
+const handleComplete = async () => {
+  await saveCompletion();
+  onComplete();
+};
   const progress =
     totalSeconds === 0
       ? 100

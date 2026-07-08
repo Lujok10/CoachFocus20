@@ -915,7 +915,36 @@ const memoryInsight = latestCompleted
         : "Today is trending lower because yesterday had stronger completed focus activity.",
   };
 
+const dailyBrief = {
+  headline:
+    todayScore >= 85
+      ? "You are set up for a strong focus day."
+      : todayScore >= 65
+        ? "You have a solid focus day ahead, but consistency matters today."
+        : "Today needs a simpler plan with fewer distractions.",
 
+  summary:
+    todayScore >= yesterdayScore
+      ? `Your focus score is trending up by ${todayScore - yesterdayScore} points. You have ${weeklyProtectedMinutes} protected minutes and ${paretoWins} high-leverage win${
+          paretoWins === 1 ? "" : "s"
+        } this week.`
+      : `Your focus score is down ${Math.abs(
+          todayScore - yesterdayScore
+        )} points from yesterday. Focus20 recommends completing today's highest-leverage block first.`,
+
+  priority:
+    `Start with "${planner.leverTitle}" because ${categoryLabel} is your strongest active lever this week.`,
+
+  nextAction:
+    weeklyGoalRemaining === 0
+      ? "Maintain momentum by completing today's block and logging the outcome."
+      : `Complete ${weeklyGoalRemaining} more high-leverage win${
+          weeklyGoalRemaining === 1 ? "" : "s"
+        } to finish this week's goal.`,
+
+  tone:
+    todayScore >= 85 ? "excellent" : todayScore >= 65 ? "steady" : "recovery",
+};
 
   const coachInsightMessage =
   categoryBlocks.length > 0
@@ -1002,6 +1031,7 @@ const xpForecast = {
 
     dailyScoreBreakdown,
     todayVsYesterday,
+    dailyBrief,
     completedFocusBlocksThisWeek,
 
     weeklyGoalTarget,

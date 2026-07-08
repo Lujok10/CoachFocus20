@@ -12,6 +12,10 @@ import {
   WifiOff,
 } from "lucide-react";
 import { WakePlan } from "../types";
+import { AchievementsCard } from "./AchievementsCard";
+import { getProductivityHistory } from "../services/productivityMemory";
+import { PredictiveInsightsCard } from "./PredictiveInsightsCard";
+import { ReadinessCard } from "./ReadinessCard";
 
 interface WakeScreenProps {
   wakePlan: WakePlan | null;
@@ -172,6 +176,73 @@ function CoachInsightCard({ message }: { message?: string }) {
       <p className="mt-3 text-base leading-7 text-slate-700">
         {message}
       </p>
+    </div>
+  );
+}
+
+function DailyBriefCard({
+  brief,
+}: {
+  brief?: {
+    headline: string;
+    summary: string;
+    priority: string;
+    nextAction: string;
+    tone: "excellent" | "steady" | "recovery";
+  };
+}) {
+  if (!brief) return null;
+
+  const toneLabel =
+    brief.tone === "excellent"
+      ? "Excellent"
+      : brief.tone === "steady"
+        ? "Steady"
+        : "Recovery";
+
+  return (
+    <div className="mt-3 w-full rounded-[28px] border border-blue-100 bg-blue-50 p-5 text-left shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-black uppercase tracking-wide text-blue-700">
+            AI Daily Brief
+          </p>
+
+          <h3 className="mt-2 text-xl font-black text-slate-900">
+            {brief.headline}
+          </h3>
+        </div>
+
+        <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-blue-700">
+          {toneLabel}
+        </span>
+      </div>
+
+      <p className="mt-3 text-base leading-7 text-slate-700">
+        {brief.summary}
+      </p>
+
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="rounded-2xl bg-white p-4">
+          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+            Priority
+          </p>
+
+          <p className="mt-2 text-sm font-semibold leading-6 text-slate-800">
+            {brief.priority}
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-white p-4">
+          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+            Next Action
+          </p>
+
+          <p className="mt-2 text-sm font-semibold leading-6 text-slate-800">
+            {brief.nextAction}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -798,7 +869,7 @@ export function WakeScreen({
     wakePlan?.weeklyTotalFocusMinutes ?? weeklyProtectedMinutes;
 
   const needleMoverWins = wakePlan?.weeklyNeedleMoverWins ?? 0;
-
+  const productivityHistory = getProductivityHistory();
   const xp = wakePlan?.xp ?? 0;
   const xpLevel = wakePlan?.xpLevel ?? 1;
   const xpNextLevel = wakePlan?.xpNextLevel ?? 500;
@@ -962,7 +1033,12 @@ export function WakeScreen({
               </div>
 
               <CoachInsightCard message={wakePlan.coachInsight?.message} />
-              <MemoryInsightCard
+              <DailyBriefCard brief={wakePlan.dailyBrief} />
+              <AchievementsCard history={productivityHistory} />
+              <ReadinessCard history={productivityHistory} />
+
+                <PredictiveInsightsCard history={productivityHistory} />
+                <MemoryInsightCard
                 insight={wakePlan.memoryInsight}
                 recentBlocks={wakePlan.recentCompletedBlocks}
               />

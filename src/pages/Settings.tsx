@@ -58,18 +58,29 @@ const defaultRules: Rules = {
 
 function Section({
   title,
+  icon,
   children,
 }: {
   title: string;
+  icon?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <motion.section
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl border border-slate-200 bg-white p-5"
+      className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
     >
-      <h2 className="mb-4 text-sm font-semibold text-slate-800">{title}</h2>
+      <div className="mb-4 flex items-center gap-2">
+        {icon && (
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+            {icon}
+          </div>
+        )}
+
+        <h2 className="text-sm font-black text-slate-900">{title}</h2>
+      </div>
+
       <div className="space-y-4">{children}</div>
     </motion.section>
   );
@@ -231,204 +242,273 @@ export function Settings() {
       </header>
 
       <div className="space-y-6 px-4 py-4">
+        
         {message && (
           <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              <motion.section
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-3xl border border-slate-200 bg-gradient-to-r from-emerald-50 via-white to-blue-50 p-6 shadow-sm"
+          >
+            ...
+          </motion.section>
             {message}
           </div>
         )}
 
-        <Section title="Backend">
-          <Row
-            icon={PlugZap}
-            label="API Status"
-            description={
-              backendOnline
-                ? "Express + Prisma backend connected"
-                : "Using local fallback until backend is running"
-            }
-          >
-            <span
-              className={`rounded-full px-2 py-1 text-xs font-medium ${
-                backendOnline
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-amber-100 text-amber-700"
-              }`}
-            >
-              {backendOnline ? "Online" : "Fallback"}
-            </span>
-          </Row>
-        </Section>
+        <Section title="System Health" icon={<Database className="h-4 w-4" />}>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <div className="rounded-2xl bg-emerald-50 p-4">
+                    <p className="text-xs font-bold uppercase tracking-wide text-emerald-600">
+                      Backend
+                    </p>
 
-        <Section title="Account">
-          <Row
-            icon={User}
-            label="Profile"
-            description="Signed-in Focus20 user"
-          />
+                    <p className="mt-2 text-lg font-black text-slate-900">
+                      {backendOnline ? "Online" : "Fallback"}
+                    </p>
 
-          <Row
-            icon={Calendar}
-            label="Google Calendar OAuth"
-            description={
-              rules.calendarConnected && rules.provider === "google"
-                ? "Connected for calendar access"
-                : "Connect to enable free/busy and event creation"
-            }
-          >
-            <a
-              href={googleConnectUrl || undefined}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-600"
-            >
-              Connect <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          </Row>
+                    <p className="mt-1 text-xs font-semibold text-emerald-700">
+                      {backendOnline
+                        ? "Express + Prisma connected"
+                        : "Local fallback active"}
+                    </p>
+                  </div>
 
-          <Row
-            icon={Calendar}
-            label="Connected Calendars"
-            description={
-              rules.calendarConnected
-                ? `${rules.provider} connected`
-                : "Not connected"
-            }
-          >
-          {googleStatus?.reconnectRequired && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                  <p className="font-medium">Google Calendar reconnect required</p>
-                  <p className="mt-1 text-xs">
-                    Missing scopes: {googleStatus.missingScopes?.join(", ") || "refresh token"}
+                  <div className="rounded-2xl bg-blue-50 p-4">
+                    <p className="text-xs font-bold uppercase tracking-wide text-blue-600">
+                      Database
+                    </p>
+
+                    <p className="mt-2 text-lg font-black text-slate-900">
+                      {backendOnline ? "Connected" : "Unknown"}
+                    </p>
+
+                    <p className="mt-1 text-xs font-semibold text-blue-700">
+                      Focus history and rules storage
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl bg-violet-50 p-4">
+                    <p className="text-xs font-bold uppercase tracking-wide text-violet-600">
+                      Calendar Sync
+                    </p>
+
+                    <p className="mt-2 text-lg font-black text-slate-900">
+                      {rules.calendarConnected ? "Healthy" : "Not connected"}
+                    </p>
+
+                    <p className="mt-1 text-xs font-semibold text-violet-700">
+                      {rules.calendarPermission === "write"
+                        ? "Read & write access"
+                        : rules.calendarPermission === "read-only"
+                          ? "Read-only access"
+                          : "No calendar access"}
+                    </p>
+                  </div>
+                </div>
+              </Section>
+
+              <Section title="Account & Calendar" icon={<User className="h-4 w-4" />}>
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                        Google Calendar
+                      </p>
+
+                      <p className="mt-2 text-lg font-black text-slate-900">
+                        {rules.calendarConnected ? "Connected" : "Not connected"}
+                      </p>
+
+                      <p className="mt-1 text-sm text-slate-600">
+                        {rules.calendarConnected
+                          ? `Provider: ${rules.provider} • Permission: ${rules.calendarPermission}`
+                          : "Connect Google Calendar to enable availability checks and focus block reservations."}
+                      </p>
+                    </div>
+
+                    <a
+                      href={googleConnectUrl || googleStatus?.authUrl || undefined}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-600"
+                    >
+                      {rules.calendarConnected ? "Reconnect" : "Connect"}
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  </div>
+                </div>
+
+                {googleStatus?.reconnectRequired && (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                    <p className="text-sm font-black text-amber-900">
+                      ⚠ Additional Google permission required
+                    </p>
+
+                    <p className="mt-2 text-sm leading-6 text-amber-800">
+                      Focus20 needs permission to read availability, create focus blocks, and
+                      keep your protected time in sync.
+                    </p>
+
+                    <a
+                      href={googleStatus.authUrl}
+                      className="mt-3 inline-flex rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white"
+                    >
+                      Reconnect Google
+                    </a>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-100">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                      Calendar Provider
+                    </p>
+
+                  <select
+                    value={rules.provider}
+                    onChange={(e) =>
+                      updateRules({
+                        provider: e.target.value as Rules["provider"],
+                        calendarConnected: e.target.value !== "local",
+                      })
+                    }
+                    className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="local">Local</option>
+                    <option value="google">Google</option>
+                    <option value="microsoft">Microsoft</option>
+                  </select>
+                </div>
+
+                <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-100">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Calendar Permission
                   </p>
 
-                  <a
-                    href={googleStatus.authUrl}
-                    className="mt-3 inline-flex rounded-lg bg-amber-600 px-3 py-2 text-xs font-medium text-white"
+                  <select
+                    value={rules.calendarPermission}
+                    onChange={(e) =>
+                      updateRules({
+                        calendarPermission:
+                          e.target.value as Rules["calendarPermission"],
+                      })
+                    }
+                    className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
                   >
-                    Reconnect Google
-                  </a>
+                    <option value="write">Read & Write</option>
+                    <option value="read-only">Read-only</option>
+                    <option value="none">None</option>
+                  </select>
+                 </div>
                 </div>
-              )}
-            <select
-              value={rules.provider}
-              onChange={(e) =>
-                updateRules({
-                  provider: e.target.value as Rules["provider"],
-                  calendarConnected: e.target.value !== "local",
-                })
-              }
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs"
-            >
-              <option value="local">Local</option>
-              <option value="google">Google</option>
-              <option value="microsoft">Microsoft</option>
-            </select>
-          </Row>
+              </Section>
 
-          <Row
-            icon={PlugZap}
-            label="Calendar Permission"
-            description="Controls reserve versus suggestion behavior"
-          >
-            <select
-              value={rules.calendarPermission}
-              onChange={(e) =>
-                updateRules({
-                  calendarPermission:
-                    e.target.value as Rules["calendarPermission"],
-                })
-              }
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs"
-            >
-              <option value="write">Write</option>
-              <option value="read-only">Read-only</option>
-              <option value="none">None</option>
-            </select>
-          </Row>
-        </Section>
+              <Section title="AI Safety Rules" icon={<Shield className="h-4 w-4" />}>
+                <div className="grid grid-cols-1 gap-3">
+                  <Toggle
+                    icon={Shield}
+                    label="Protect My 20%"
+                    description="Automatically reserve your highest-leverage focus blocks when calendar write access is available."
+                    value={rules.protectEnabled}
+                    onChange={() =>
+                      updateRules({ protectEnabled: !rules.protectEnabled })
+                    }
+                  />
 
-        <Section title="AI Safety Rules">
-          <Toggle
-            icon={Shield}
-            label="Protect my 20% time"
-            description="Allow silent reservation when calendar has write access"
-            value={rules.protectEnabled}
-            onChange={() =>
-              updateRules({ protectEnabled: !rules.protectEnabled })
-            }
-          />
+                  <Toggle
+                    icon={PlugZap}
+                    label="Flex Shift"
+                    description="Allow Focus20 to move unfinished FLEX work. Hard limits stay protected."
+                    value={rules.flexShiftEnabled}
+                    onChange={() =>
+                      updateRules({ flexShiftEnabled: !rules.flexShiftEnabled })
+                    }
+                  />
 
-          <Toggle
-            icon={Shield}
-            label="Flex shift opt-in"
-            description="Default off. Only FLEX events can move; max 1/day."
-            value={rules.flexShiftEnabled}
-            onChange={() =>
-              updateRules({ flexShiftEnabled: !rules.flexShiftEnabled })
-            }
-          />
+                  <Toggle
+                    icon={Bell}
+                    label="Smart Notifications"
+                    description={
+                      rules.completedFirstLever
+                        ? "Send up to 2 helpful nudges per day: one before focus and one check-in."
+                        : "Unlocks after your first completed focus block."
+                    }
+                    value={rules.notificationsEnabled}
+                    onChange={() =>
+                      updateRules({
+                        notificationsEnabled: rules.completedFirstLever
+                          ? !rules.notificationsEnabled
+                          : false,
+                      })
+                    }
+                  />
+                </div>
+              </Section>
 
-          <Toggle
-            icon={Bell}
-            label="Notifications"
-            description={
-              rules.completedFirstLever
-                ? "Max 2/day: pre-block + optional check-in"
-                : "Locked until first lever block is completed"
-            }
-            value={rules.notificationsEnabled}
-            onChange={() =>
-              updateRules({
-                notificationsEnabled: rules.completedFirstLever
-                  ? !rules.notificationsEnabled
-                  : false,
-              })
-            }
-          />
-        </Section>
+              <Section title="Push Notifications" icon={<Bell className="h-4 w-4" />}>
+                <div className="rounded-2xl bg-slate-50 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                      Notification Status
+                    </p>
 
-        <Section title="Push Notifications">
-          <div className="space-y-3">
-            <button
-              disabled={isWorking}
-              onClick={() =>
-                runAction(
-                  registerPushNotifications,
-                  "Push notifications enabled."
-                )
-              }
-              className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
-            >
-              Enable Push Notifications
-            </button>
+                    <p className="mt-2 text-lg font-black text-slate-900">
+                      {rules.notificationsEnabled ? "Enabled" : "Disabled"}
+                    </p>
 
-            <button
-              disabled={isWorking}
-              onClick={() =>
-                runAction(
-                  sendTestPushNotification,
-                  "Test notification sent."
-                )
-              }
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 disabled:opacity-50"
-            >
-              Send Test Notification
-            </button>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Receive reminders before focus sessions and optional completion
+                      check-ins.
+                    </p>
+                  </div>
 
-            <button
-              disabled={isWorking}
-              onClick={() =>
-                runAction(
-                  unregisterPushNotifications,
-                  "Push notifications disabled."
-                )
-              }
-              className="w-full rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 disabled:opacity-50"
-            >
-              Disable Push Notifications
-            </button>
-          </div>
-        </Section>
+                  <Bell className="h-8 w-8 text-emerald-500" />
+                </div>
+              </div>
 
-       <Section title="Mobile App">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <button
+                  disabled={isWorking}
+                  onClick={() =>
+                    runAction(
+                      registerPushNotifications,
+                      "Push notifications enabled."
+                    )
+                  }
+                  className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  Enable
+                </button>
+
+                <button
+                  disabled={isWorking}
+                  onClick={() =>
+                    runAction(
+                      sendTestPushNotification,
+                      "Test notification sent."
+                    )
+                  }
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Send Test
+                </button>
+
+                <button
+                  disabled={isWorking}
+                  onClick={() =>
+                    runAction(
+                      unregisterPushNotifications,
+                      "Push notifications disabled."
+                    )
+                  }
+                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 hover:bg-red-100 disabled:opacity-50"
+                >
+                  Disable
+                </button>
+              </div>
+            </Section>
+
+            <Section title="Mobile App">
             <Row
               icon={Smartphone}
               label="Install Focus20"
@@ -458,50 +538,76 @@ export function Settings() {
             </div>
           </Section>
 
-        <Section title="Preferences">
-          <Row
-            icon={Bell}
-            label="Buffer Minutes"
-            description="Default spacing before and after protected blocks"
-          >
+        <Section title="Preferences" icon={<PlugZap className="h-4 w-4" />}>
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-black text-slate-900">
+                  Buffer Time
+                </p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Spacing before and after protected focus blocks.
+                </p>
+              </div>
+
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-700">
+                {rules.buffersMinutes} min
+              </span>
+            </div>
+
             <input
-              type="number"
+              type="range"
               min={0}
               max={60}
+              step={5}
               value={rules.buffersMinutes}
               onChange={(e) =>
                 updateRules({ buffersMinutes: Number(e.target.value) })
               }
-              className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-xs"
+              className="mt-4 w-full accent-emerald-600"
             />
-          </Row>
+          </div>
 
-          <Row
-            icon={Shield}
-            label="Max Flex Moves Per Day"
-            description="Hard cap for AI event shifting"
-          >
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-black text-slate-900">
+                  Max Flex Moves
+                </p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Daily cap for AI event shifting.
+                </p>
+              </div>
+
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-700">
+                {rules.maxMovesPerDay}/3
+              </span>
+            </div>
+
             <input
-              type="number"
+              type="range"
               min={0}
               max={3}
+              step={1}
               value={rules.maxMovesPerDay}
               onChange={(e) =>
                 updateRules({ maxMovesPerDay: Number(e.target.value) })
               }
-              className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-xs"
+              className="mt-4 w-full accent-emerald-600"
             />
-          </Row>
-        </Section>
+          </div>
+        </div>
+      </Section>
 
-        <Section title="Privacy & Data">
+        <Section title="Privacy & Data" icon={<Trash2 className="h-4 w-4" />}>
           <div className="space-y-3">
             <button
               disabled={isWorking}
               onClick={() =>
                 runAction(apiDisconnectGoogle, "Google Calendar disconnected.")
               }
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 disabled:opacity-50"
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
               Disconnect Google Calendar
             </button>
@@ -509,12 +615,9 @@ export function Settings() {
             <button
               disabled={isWorking}
               onClick={() =>
-                runAction(
-                  apiResetPatternProfile,
-                  "Learned patterns were reset."
-                )
+                runAction(apiResetPatternProfile, "Learned patterns were reset.")
               }
-              className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700 disabled:opacity-50"
+              className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700 hover:bg-amber-100 disabled:opacity-50"
             >
               Reset Learned Patterns
             </button>
@@ -524,7 +627,7 @@ export function Settings() {
               onClick={() =>
                 runAction(apiClearUserHistory, "User history cleared.")
               }
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
             >
               <Trash2 className="h-4 w-4" />
               Clear User History

@@ -122,6 +122,14 @@ todayVsYesterday?: {
   reasons?: string[];
 };
 
+dailyBrief?: {
+  headline: string;
+  summary: string;
+  priority: string;
+  nextAction: string;
+  tone: "excellent" | "steady" | "recovery";
+};
+
 recentCompletedBlocks?: {
   title: string;
   category: LeverCategory;
