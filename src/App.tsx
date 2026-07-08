@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth, SignInButton, useUser } from "@clerk/clerk-react";
-
+import { unlockAudio } from "./services/sounds";
 import { Calendar } from "./pages/Calendar";
 import { Insights } from "./pages/Insights";
 import { Settings } from "./pages/Settings";
@@ -70,6 +70,24 @@ export default function App() {
         .then(setGoogleConnectUrl)
         .catch(() => setGoogleConnectUrl(""));
     }, [authReady]);
+
+
+  useEffect(() => {
+  const enableAudio = () => {
+    unlockAudio();
+
+    document.removeEventListener("click", enableAudio);
+    document.removeEventListener("touchstart", enableAudio);
+  };
+
+  document.addEventListener("click", enableAudio);
+  document.addEventListener("touchstart", enableAudio);
+
+  return () => {
+    document.removeEventListener("click", enableAudio);
+    document.removeEventListener("touchstart", enableAudio);
+  };
+}, []);  
 
   const {
   wakePlan,
