@@ -30,6 +30,11 @@ import {
 
 import { usePwaInstall } from "../hooks/usePwaInstall";
 
+import {
+  unlockAudio,
+  playTaskCompletedSound,
+} from "../services/sounds";
+
 type Rules = {
   provider: "local" | "google" | "microsoft";
   calendarConnected: boolean;
@@ -443,7 +448,19 @@ export function Settings() {
                   />
                 </div>
               </Section>
+              <button
+                type="button"
+                onClick={() => {
+                  unlockAudio();
 
+                  setTimeout(() => {
+                    playTaskCompletedSound();
+                  }, 300);
+                }}
+                className="rounded-xl bg-emerald-600 px-4 py-3 text-white"
+              >
+                Test Sound
+              </button>
               <Section title="Push Notifications" icon={<Bell className="h-4 w-4" />}>
                 <div className="rounded-2xl bg-slate-50 p-4">
                 <div className="flex items-start justify-between gap-4">

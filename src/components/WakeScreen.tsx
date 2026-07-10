@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import {
   CalendarPlus,
@@ -16,6 +16,9 @@ import { AchievementsCard } from "./AchievementsCard";
 import { getProductivityHistory } from "../services/productivityMemory";
 import { PredictiveInsightsCard } from "./PredictiveInsightsCard";
 import { ReadinessCard } from "./ReadinessCard";
+import confetti from "canvas-confetti";
+import { LevelUpModal } from "./LevelUpModal";
+import { playLevelUpSound } from "../services/sounds";
 
 interface WakeScreenProps {
   wakePlan: WakePlan | null;
@@ -711,6 +714,8 @@ function TodayVsYesterdayCard({
   }) {
   const isUp = difference >= 0;
 
+
+
   return (
     <div className="mt-3 w-full rounded-[28px] border border-slate-200 bg-white p-5 text-left shadow-sm">
       <p className="text-sm font-bold uppercase tracking-wide text-slate-500">
@@ -812,6 +817,22 @@ function MemoryInsightCard({
   );
 }
 
+function calculateLevelFromXp(xp: number) {
+  return Math.max(1, Math.floor(xp / 500) + 1);
+}
+
+function getLevelUnlock(level: number) {
+  const unlocks: Record<number, string> = {
+    2: "Smart Focus Recommendations",
+    3: "Advanced Productivity Insights",
+    4: "Weekly Performance Reports",
+    5: "Predictive Focus Forecasts",
+    6: "Elite Focus Coach Mode",
+  };
+
+  return unlocks[level];
+}
+
 export function WakeScreen({
   wakePlan,
   isLoading,
@@ -821,6 +842,10 @@ export function WakeScreen({
   onVoiceCheckIn,
 }: WakeScreenProps) {
   const [whyNotIndex, setWhyNotIndex] = useState<number | null>(null);
+  const [levelUpModal, setLevelUpModal] = useState<{
+    level: number;
+    unlockedFeature?: string;
+  } | null>(null);
 
   const statusLabel = wakePlan?.calendarReconnectRequired
     ? "Reconnect calendar"
@@ -871,9 +896,41 @@ export function WakeScreen({
   const needleMoverWins = wakePlan?.weeklyNeedleMoverWins ?? 0;
   const productivityHistory = getProductivityHistory();
   const xp = wakePlan?.xp ?? 0;
-  const xpLevel = wakePlan?.xpLevel ?? 1;
-  const xpNextLevel = wakePlan?.xpNextLevel ?? 500;
+  const xpLevel = wakePlan?.xpLevel ?? calculateLevelFromXp(xp);
+  const xpNextLevel = wakePlan?.xpNextLevel ?? xpLevel * 500;
   const xpRemaining = Math.max(0, xpNextLevel - xp);
+  const currentLevel = xpLevel;
+
+  useEffect(() => {
+    if (!wakePlan) return;
+
+    const storageKey = "focus20-highest-level";
+    const storedValue = localStorage.getItem(storageKey);
+
+    if (!storedValue) {
+      localStorage.setItem(storageKey, String(currentLevel));
+      return;
+    }
+
+    const previousLevel = Number(storedValue);
+
+    if (currentLevel <= previousLevel) return;
+
+    setLevelUpModal({
+      level: currentLevel,
+      unlockedFeature: getLevelUnlock(currentLevel),
+    });
+
+    playLevelUpSound();
+
+    confetti({
+      particleCount: 180,
+      spread: 120,
+      origin: { y: 0.65 },
+    });
+
+    localStorage.setItem(storageKey, String(currentLevel));
+  }, [currentLevel, wakePlan]);
 
   const streakDays = wakePlan?.streakDays ?? 0;
 
@@ -1273,6 +1330,14 @@ export function WakeScreen({
           <ChevronUp className="h-5 w-5 group-hover:text-emerald-500" />
         </motion.div>
       </motion.button>
+
+      {levelUpModal && (
+        <LevelUpModal
+          level={levelUpModal.level}
+          unlockedFeature={levelUpModal.unlockedFeature}
+          onClose={() => setLevelUpModal(null)}
+        />
+      )}
     </div>
   );
 }

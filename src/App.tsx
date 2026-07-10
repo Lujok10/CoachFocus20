@@ -72,22 +72,29 @@ export default function App() {
     }, [authReady]);
 
 
-  useEffect(() => {
-  const enableAudio = () => {
-    unlockAudio();
+ useEffect(() => {
+      const enableAudio = () => {
+        unlockAudio();
 
-    document.removeEventListener("click", enableAudio);
-    document.removeEventListener("touchstart", enableAudio);
-  };
+        document.removeEventListener(
+          "pointerdown",
+          enableAudio
+        );
+      };
 
-  document.addEventListener("click", enableAudio);
-  document.addEventListener("touchstart", enableAudio);
+      document.addEventListener(
+        "pointerdown",
+        enableAudio,
+        { once: true }
+      );
 
-  return () => {
-    document.removeEventListener("click", enableAudio);
-    document.removeEventListener("touchstart", enableAudio);
-  };
-}, []);  
+      return () => {
+        document.removeEventListener(
+          "pointerdown",
+          enableAudio
+        );
+      };
+    }, []);
 
   const {
   wakePlan,
