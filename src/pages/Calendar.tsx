@@ -764,14 +764,17 @@ async function handleOptimizeDay() {
         protectAsFocus,
       });
 
-      setEvents((current) => [
-        ...current,
+   setEvents((current) => [
+        ...current.filter((event) => String(event.id) !== String(task.id)),
         {
           id: task.id,
-          title: taskTitle,
+          title: taskTitle.trim(),
           start: start.toISOString(),
           end: end.toISOString(),
+          startIso: start.toISOString(),
+          endIso: end.toISOString(),
           type: protectAsFocus ? "focus" : "task",
+          isFocusBlock: protectAsFocus,
           protectAsFocus,
         },
       ]);
@@ -781,8 +784,10 @@ async function handleOptimizeDay() {
       setTaskTime("");
       setTaskDuration(60);
       setProtectAsFocus(true);
+      setCurrentDate(start);
+      setMessage("Task added to your calendar.");
       setShowAddTask(false);
-      setReloadIndex((current) => current + 1);
+    
     } catch (error) {
       setTaskError(
         error instanceof Error ? error.message : "Failed to add task."
