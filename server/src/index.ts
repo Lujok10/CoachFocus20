@@ -191,6 +191,15 @@ const checkinSchema = {
   note: optional(stringField(5_000)),
 };
 
+
+app.get("/api/health", (_req, res) => {
+  res.status(200).json({
+    ok: true,
+    service: "focus20-api",
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.get("/health", async (_req, res) => {
   const health = await getHealthStatus();
   res.status(health.ok ? 200 : 503).json(health);
