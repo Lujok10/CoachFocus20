@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "dev:api": "tsx watch --env-file=.env server/src/index.ts",
-    "start:api": "node --env-file=.env dist/server/src/index.js",
+    "start:api": "node dist/server/src/index.js",
+    "start:api:local": "node --env-file=.env dist/server/src/index.js",
     "build:api": "tsc -p tsconfig.server.json && node -e \"require('fs').mkdirSync('dist/server',{recursive:true}); require('fs').writeFileSync('dist/server/package.json', JSON.stringify({type:'commonjs'}))\"",
     "dev:full": "concurrently \"npm run dev:api\" \"npm run dev\"",
     "build": "tsc -b && vite build",
