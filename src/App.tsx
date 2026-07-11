@@ -6,7 +6,7 @@ import { Calendar } from "./pages/Calendar";
 import { Insights } from "./pages/Insights";
 import { Settings } from "./pages/Settings";
 import { AdminAnalytics } from "./pages/AdminAnalytics";
-
+import { Help } from "./pages/Help";
 import { Navigation } from "./components/Navigation";
 import { WakeScreen } from "./components/WakeScreen";
 import { DetailsScreen } from "./components/DetailsScreen";
@@ -29,6 +29,7 @@ export type TabType =
   | "calendar"
   | "insights"
   | "settings"
+  | "help"
   | "admin-analytics";
 
 export default function App() {
@@ -283,17 +284,31 @@ if (error) {
               </div>
             ))}
 
-          {activeTab === "settings" && <Settings />}
+          {activeTab === "help" && (
+              <Help
+                onBack={() => setActiveTab("settings")}
+                onReplayOnboarding={() => {
+                  localStorage.removeItem("focus20_onboarding_completed");
+                  setShowOnboarding(true);
+                  setActiveTab("home");
+                }}
+              />
+            )}
 
-          {activeTab === "admin-analytics" &&
-            (isAdmin ? (
-              <AdminAnalytics />
-            ) : (
-              <div className="flex min-h-screen items-center justify-center px-6 text-center">
-                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                  <p className="text-sm font-semibold text-slate-900">
-                    Admin access required
-                  </p>
+          {activeTab === "settings" && (
+            <Settings onOpenHelp={() => setActiveTab("help")} />
+              )}
+
+              {activeTab === "admin-analytics" &&
+                (isAdmin ? (
+                  <AdminAnalytics />
+                ) : (
+                  <div className="flex min-h-screen items-center justify-center px-6 text-center">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                      <p className="text-sm font-semibold text-slate-900">
+                        Admin access required
+                      </p>
+
                   <p className="mt-2 text-sm text-slate-500">
                     This dashboard is only available to admin users.
                   </p>

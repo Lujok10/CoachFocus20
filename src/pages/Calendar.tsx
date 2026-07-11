@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { enqueueOfflineJob } from "../services/offlineQueue";
 import { AskFocus20 } from "../components/AskFocus20";
 import confetti from "canvas-confetti";
+import { invalidateWakePlanCache } from "../hooks/useWakePlan";
 import {
   ChevronLeft,
   ChevronRight,
@@ -580,6 +581,8 @@ export function Calendar({ authReady }: { authReady: boolean }) {
         protectAsFocus: true,
       });
 
+      invalidateWakePlanCache();
+
       setMessage("Deep Work block reserved successfully.");
       setCalendarRecommendation(null);
       setReloadIndex((current) => current + 1);
@@ -673,6 +676,7 @@ async function handleOptimizeDay() {
         addToCalendar: Boolean(event.providerEventId),
         protectAsFocus: eventType(event) === "focus",
       });
+      invalidateWakePlanCache();
 
       setMessage("Calendar updated.");
     } catch (error) {
@@ -778,6 +782,7 @@ async function handleOptimizeDay() {
           protectAsFocus,
         },
       ]);
+      invalidateWakePlanCache();
 
       setTaskTitle("");
       setTaskDate("");

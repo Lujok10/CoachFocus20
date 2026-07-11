@@ -77,6 +77,21 @@ function addMinutes(date: Date, minutes: number) {
   return new Date(date.getTime() + minutes * 60_000);
 }
 
+
+function getPlannerCacheKey(userId: string) {
+  const today = new Date().toISOString().slice(0, 10);
+
+  return `planner:${userId}:${today}`;
+}
+
+function getPlannerCacheExpiry() {
+  const expires = new Date();
+
+  expires.setHours(23, 59, 59, 999);
+
+  return expires;
+}
+
 function getWindowLabel(date: Date) {
   return date.getHours() < 12 ? "AM" : "PM";
 }
@@ -361,7 +376,44 @@ export async function refreshWakePlan(userId: string, force = false) {
   await ensurePatternProfile(userId);
   await rebuildPatternProfile(userId);
 
-  const planner = await runAiPlanner(userId);
+ const plannerCacheKey = getPlannerCacheKey(userId);
+
+let planner;
+
+const cachedPlanner =
+      await prisma.aiRecommendationCache.findUnique({
+        where: {
+          cacheKey: plannerCacheKey,
+        },
+      });
+
+    if (
+      cachedPlanner &&
+      cachedPlanner.expiresAt > new Date()
+    ) {
+      planner =
+        cachedPlanner.responseJson as Awaited<
+          ReturnType<typeof runAiPlanner>
+        >;
+    } else {
+      planner = await runAiPlanner(userId);
+
+      await prisma.aiRecommendationCache.upsert({
+        where: {
+          cacheKey: plannerCacheKey,
+        },
+        update: {
+          responseJson: planner as Prisma.JsonObject,
+          expiresAt: getPlannerCacheExpiry(),
+        },
+        create: {
+          userId,
+          cacheKey: plannerCacheKey,
+          responseJson: planner as Prisma.JsonObject,
+          expiresAt: getPlannerCacheExpiry(),
+        },
+      });
+    } 
   const rules = await getRules(userId);
   const { start: todayStart, end: todayEnd } = todayRange();
 
@@ -1199,7 +1251,13 @@ export async function recordCheckin(input: {
     status,
   });
 
-  await rebuildPatternProfile(focusBlock.userId);
+ await rebuildPatternProfile(focusBlock.userId);
+
+await prisma.aiRecommendationCache.deleteMany({
+  where: {
+    userId: focusBlock.userId,
+    },
+  });
 
   return {
     ok: true,

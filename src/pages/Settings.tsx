@@ -61,6 +61,8 @@ const defaultRules: Rules = {
   timezone: "America/New_York",
 };
 
+
+
 function Section({
   title,
   icon,
@@ -153,7 +155,12 @@ function Toggle({
   );
 }
 
-export function Settings() {
+type SettingsProps = {
+  onOpenHelp: () => void;
+};
+
+
+export function Settings({ onOpenHelp }: SettingsProps) {
   const [rules, setRules] = useState<Rules>(defaultRules);
   const [backendOnline, setBackendOnline] = useState(false);
   const [googleConnectUrl, setGoogleConnectUrl] = useState("");
@@ -161,7 +168,6 @@ export function Settings() {
   const [message, setMessage] = useState("");
   const [googleStatus, setGoogleStatus] = useState<any>(null);
   const { canInstall, install } = usePwaInstall();
-
   const loadSettings = async () => {
     try {
       const remoteRules = await apiGetUserRules();
@@ -342,70 +348,102 @@ export function Settings() {
                   </div>
                 </div>
 
-                {googleStatus?.reconnectRequired && (
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                    <p className="text-sm font-black text-amber-900">
-                      ⚠ Additional Google permission required
-                    </p>
-
-                    <p className="mt-2 text-sm leading-6 text-amber-800">
-                      Focus20 needs permission to read availability, create focus blocks, and
-                      keep your protected time in sync.
-                    </p>
-
-                    <a
-                      href={googleStatus.authUrl}
-                      className="mt-3 inline-flex rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white"
-                    >
-                      Reconnect Google
-                    </a>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-100">
-                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                      Calendar Provider
-                    </p>
-
-                  <select
-                    value={rules.provider}
-                    onChange={(e) =>
-                      updateRules({
-                        provider: e.target.value as Rules["provider"],
-                        calendarConnected: e.target.value !== "local",
-                      })
-                    }
-                    className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                  >
-                    <option value="local">Local</option>
-                    <option value="google">Google</option>
-                    <option value="microsoft">Microsoft</option>
-                  </select>
-                </div>
-
-                <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-100">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                    Calendar Permission
+             {googleStatus?.reconnectRequired && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-sm font-black text-amber-900">
+                    ⚠ Additional Google permission required
                   </p>
 
-                  <select
-                    value={rules.calendarPermission}
-                    onChange={(e) =>
-                      updateRules({
-                        calendarPermission:
-                          e.target.value as Rules["calendarPermission"],
-                      })
-                    }
-                    className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                  <p className="mt-2 text-sm leading-6 text-amber-800">
+                    Focus20 needs permission to read availability, create focus blocks, and
+                    keep your protected time in sync.
+                  </p>
+
+                  <a
+                    href={googleStatus.authUrl}
+                    className="mt-3 inline-flex rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white"
                   >
-                    <option value="write">Read & Write</option>
-                    <option value="read-only">Read-only</option>
-                    <option value="none">None</option>
-                  </select>
-                 </div>
+                    Reconnect Google
+                  </a>
                 </div>
-              </Section>
+              )}
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-100">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+              Calendar Provider
+            </p>
+
+            <select
+              value={rules.provider}
+              onChange={(e) =>
+                updateRules({
+                  provider: e.target.value as Rules["provider"],
+                  calendarConnected: e.target.value !== "local",
+                })
+              }
+              className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+            >
+              <option value="local">Local</option>
+              <option value="google">Google</option>
+              <option value="microsoft">Microsoft</option>
+            </select>
+          </div>
+
+            <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-100">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                Calendar Permission
+              </p>
+
+              <select
+                value={rules.calendarPermission}
+                onChange={(e) =>
+                  updateRules({
+                    calendarPermission:
+                      e.target.value as Rules["calendarPermission"],
+                  })
+                }
+                className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+              >
+                <option value="write">Read & Write</option>
+                <option value="read-only">Read-only</option>
+                <option value="none">None</option>
+              </select>
+            </div>
+          </div>
+
+            <div className="rounded-2xl bg-slate-50 p-4">
+              <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                How Calendar Permissions Are Used
+              </p>
+
+              <div className="mt-3 space-y-3 text-sm text-slate-600">
+                <div>
+                  <p className="font-bold text-slate-800">Read & Write</p>
+                  <p className="mt-1 text-xs leading-5">
+                    Focus20 can check availability, create protected focus blocks, update
+                    Focus20-created events, and move events you explicitly mark as FLEX.
+                  </p>
+                </div>
+
+                <div>
+                  <p className="font-bold text-slate-800">Read-only</p>
+                  <p className="mt-1 text-xs leading-5">
+                    Focus20 can check availability and recommend open focus windows, but it
+                    cannot create, edit, or move calendar events.
+                  </p>
+                </div>
+
+                <div>
+                  <p className="font-bold text-slate-800">None</p>
+                  <p className="mt-1 text-xs leading-5">
+                    Focus20 does not access your external calendar and uses only local
+                    planning information.
+                  </p>
+                </div>
+              </div>
+            </div>
+            </Section>
 
               <Section title="AI Safety Rules" icon={<Shield className="h-4 w-4" />}>
                 <div className="grid grid-cols-1 gap-3">
@@ -545,16 +583,24 @@ export function Settings() {
               )}
             </Row>
 
-            <div className="mt-4">
-              <button
-                onClick={resetOnboarding}
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Replay Onboarding
-              </button>
-            </div>
-          </Section>
+            <div className="mt-4 space-y-3">
+            <button
+              onClick={resetOnboarding}
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Replay Onboarding
+            </button>
 
+            <button
+              type="button"
+              onClick={onOpenHelp}
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Open Help & Privacy
+            </button>
+          </div>
+          </Section>
+         
         <Section title="Preferences" icon={<PlugZap className="h-4 w-4" />}>
         <div className="space-y-4">
           <div className="rounded-2xl bg-slate-50 p-4">

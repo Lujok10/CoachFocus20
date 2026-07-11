@@ -4,7 +4,7 @@ import { X, Mic, Check } from "lucide-react";
 import { voiceCheckinRecord } from "../services/deploymentCoach";
 import { apiVoiceCheckinRecord } from "../services/apiClient";
 import { enqueueOfflineJob } from "../services/offlineQueue";
-
+import { invalidateWakePlanCache } from "../hooks/useWakePlan";
 interface VoiceCheckInProps {
   focusBlockId: string;
   onClose: () => void;
@@ -71,6 +71,7 @@ export function VoiceCheckIn({ focusBlockId, onClose }: VoiceCheckInProps) {
     }
 
     localStorage.removeItem("focus20_current_goal");
+    invalidateWakePlanCache();
 
     setSubmitted(true);
     setTimeout(onClose, 1000);
@@ -230,6 +231,23 @@ export function VoiceCheckIn({ focusBlockId, onClose }: VoiceCheckInProps) {
                 </div>
               </div>
             )}
+
+           <div className="mb-6 mt-3 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+              <p className="text-xs font-black uppercase tracking-wide text-blue-700">
+                Voice Privacy
+              </p>
+
+              <p className="mt-2 text-sm leading-6 text-blue-900">
+                Your voice check-in is used only to understand your focus progress and
+                generate coaching feedback. Focus20 does not continuously listen in the
+                background.
+              </p>
+
+              <p className="mt-2 text-xs leading-5 text-blue-700">
+                Microphone access is activated only when you start a voice check-in. You can
+                stop recording at any time.
+              </p>
+            </div>
 
             {canSubmit && (
               <button

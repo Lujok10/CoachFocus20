@@ -7,7 +7,7 @@ import { VoiceCheckinRecorder } from "./VoiceCheckinRecorder";
 import { apiTrackEvent } from "../services/apiClient";
 import { playTaskCompletedSound } from "../services/sounds";
 import confetti from "canvas-confetti";
-
+import { invalidateWakePlanCache } from "../hooks/useWakePlan";
 interface FocusModeOverlayProps {
   wakePlan: WakePlan;
   onClose: () => void;
@@ -220,7 +220,7 @@ try {
     "block_completed",
     executionRecord
   );
-
+  invalidateWakePlanCache();
   playTaskCompletedSound();
 
   confetti({

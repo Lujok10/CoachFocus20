@@ -46,13 +46,12 @@ export async function createTask(
 if (!title) {
   throw new Error("Task title is required.");
 }
-  return prisma.task.create({
-   data: {
+ const task = await prisma.task.create({
+    data: {
       userId,
       title,
       category: input.category ?? "admin",
       notes: input.notes ?? null,
-
       dueDateIso: input.dueDateIso ? new Date(input.dueDateIso) : null,
       startIso: input.startIso ? new Date(input.startIso) : null,
       endIso: input.endIso ? new Date(input.endIso) : null,
@@ -60,6 +59,14 @@ if (!title) {
       status: input.startIso ? "scheduled" : "unscheduled",
     },
   });
+
+  await prisma.aiRecommendationCache.deleteMany({
+    where: {
+      userId,
+    },
+  });
+
+return task;
 }
 
 export async function listTasks(userId: string) {
@@ -159,35 +166,41 @@ const end = input.endIso
     },
   });
 
-  const action = await prisma.actionsLog.create({
-        data: {
-          userId: task.userId,
-          actionType: "schedule_task",
-          payload: {
-            taskId,
-            title: updated.title,
-            providerEventId,
-            startIso: start.toISOString(),
-            endIso: end.toISOString(),
+ const action = await prisma.actionsLog.create({
+    data: {
+      userId: task.userId,
+      actionType: "schedule_task",
+      payload: {
+        taskId,
+        title: updated.title,
+        providerEventId,
+        startIso: start.toISOString(),
+        endIso: end.toISOString(),
 
-            scheduler: smartSlot
-              ? {
-                  score: smartSlot.score,
-                  reasons: smartSlot.reasons,
-                  capacity: smartSlot.capacity,
-                }
-              : null,
-          },
-          undoPayload: {
-            taskId,
-            providerEventId,
-            operation: providerEventId
-              ? "delete_google_event"
-              : "unschedule_task",
-          },
-        },
-      });
-      
+        scheduler: smartSlot
+          ? {
+              score: smartSlot.score,
+              reasons: smartSlot.reasons,
+              capacity: smartSlot.capacity,
+            }
+          : null,
+      },
+      undoPayload: {
+        taskId,
+        providerEventId,
+        operation: providerEventId
+          ? "delete_google_event"
+          : "unschedule_task",
+      },
+    },
+  });
+
+  await prisma.aiRecommendationCache.deleteMany({
+    where: {
+      userId,
+    },
+  });
+
   return {
     ok: true,
     task: updated,
@@ -232,17 +245,23 @@ export async function undoTaskSchedule(userId: string, taskId: string) {
   });
 
   await prisma.actionsLog.create({
-    data: {
-      userId,
-      actionType: "undo_task_schedule",
-      payload: { taskId },
-      undoPayload: { notUndoable: true },
-      status: "undone",
-    },
-  });
+      data: {
+        userId,
+        actionType: "undo_task_schedule",
+        payload: { taskId },
+        undoPayload: { notUndoable: true },
+        status: "undone",
+      },
+    });
 
-  return {
-    ok: true,
-    task: updated,
-  };
+    await prisma.aiRecommendationCache.deleteMany({
+      where: {
+        userId,
+      },
+    });
+
+    return {
+      ok: true,
+      task: updated,
+    };
 }
