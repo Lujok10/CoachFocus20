@@ -1,7 +1,8 @@
 import { UserRules, WakePlan } from "../types";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:8787";
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:8787"
+).replace(/\/$/, "");
 
 let clerkTokenProvider: (() => Promise<string | null>) | null = null;
 
@@ -76,7 +77,11 @@ export async function authFetch<T = unknown>(
 }
 
 export async function apiHealth() {
-  return request<{ ok: boolean }>("/health");
+  return request<{
+    ok: boolean;
+    service: string;
+    timestamp: string;
+  }>("/api/health");
 }
 
 export async function getGoogleConnectUrl() {
