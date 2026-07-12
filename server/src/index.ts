@@ -491,18 +491,39 @@ app.post(
 
       await ensureUser(userId);
 
+      const eventName =
+        req.body?.name ??
+        req.body?.eventName ??
+        "unknown_event";
+
+      const payload =
+        req.body?.payload &&
+        typeof req.body.payload === "object"
+          ? req.body.payload
+          : {};
+
+      console.log("ANALYTICS REQUEST", {
+        userId,
+        eventName,
+        hasPayload: Object.keys(payload).length > 0,
+      });
+
       const event = await trackAnalytics(
         userId,
-        req.body?.name ?? req.body?.eventName ?? "unknown_event",
-        req.body?.payload ?? {}
+        eventName,
+        payload
       );
 
-      res.json({
+      res.status(200).json({
         ok: true,
         event,
       });
     } catch (error) {
-      console.error("Analytics tracking failed:", error);
+      console.error(
+        "Analytics tracking failed:",
+        error instanceof Error ? error.stack : error
+      );
+
       next(error);
     }
   }
