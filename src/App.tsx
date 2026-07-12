@@ -49,16 +49,30 @@ export default function App() {
   const isAdmin = user?.publicMetadata?.role === "admin";
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn) return;
+      if (!isLoaded) {
+        setAuthReady(false);
+        return;
+      }
 
-   setClerkTokenProvider(async () => {
-    const token = await getToken();
+      if (!isSignedIn) {
+        setClerkTokenProvider(async () => null);
+        setAuthReady(false);
+        return;
+      }
 
-    return token ?? null;
-  });
+      setClerkTokenProvider(async () => {
+        try {
+          const token = await getToken();
 
-    setAuthReady(true);
-  }, [isLoaded, isSignedIn, getToken]);
+          return token ?? null;
+        } catch (error) {
+          console.error("Unable to retrieve Clerk token", error);
+          return null;
+        }
+      });
+
+  setAuthReady(true);
+}, [isLoaded, isSignedIn, getToken]);
 
   useEffect(() => {
       if (!authReady) return;

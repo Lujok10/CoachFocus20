@@ -41,6 +41,12 @@ if (token) {
   headers.Authorization = `Bearer ${token}`;
 }
 
+console.log("Focus20 authentication", {
+  path,
+  hasToken: Boolean(token),
+  tokenPrefix: token ? token.slice(0, 8) : "none",
+});
+
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
