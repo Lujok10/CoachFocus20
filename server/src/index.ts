@@ -516,25 +516,61 @@ app.get("/api/auth/google", (req, res, next) => {
   }
 });
 
-app.get("/api/google/callback", async (req, res, next) => {
+app.get("/api/google/callback", async (req, res) => {
   try {
-    const code = typeof req.query.code === "string" ? req.query.code : "";
-    const state = typeof req.query.state === "string" ? req.query.state : "";
+    const code =
+      typeof req.query.code === "string"
+        ? req.query.code
+        : "";
+
+    const state =
+      typeof req.query.state === "string"
+        ? req.query.state
+        : "";
 
     if (!code) {
-      res.status(400).send("Missing Google OAuth code. Start connection from Focus20 Settings again.");
+      res
+        .status(400)
+        .send(
+          "Missing Google OAuth code. Start connection from Focus20 Settings again."
+        );
       return;
     }
 
     if (!state) {
-      res.status(400).send("Missing Google OAuth state. Start connection from Focus20 Settings again.");
+      res
+        .status(400)
+        .send(
+          "Missing Google OAuth state. Start connection from Focus20 Settings again."
+        );
       return;
     }
 
     await handleGoogleCallback(code, state);
-    res.redirect(`${process.env.FRONTEND_URL ?? "https://coach-focus20.vercel.app"}/settings?google=connected`);
+
+    const frontendUrl =
+      process.env.FRONTEND_URL ?? "http://localhost:5173";
+
+    res.redirect(
+      `${frontendUrl}/settings?google=connected`
+    );
   } catch (error) {
-    next(error);
+    console.error(
+      "Google OAuth callback failed:",
+      error
+    );
+
+    const frontendUrl =
+      process.env.FRONTEND_URL ?? "http://localhost:5173";
+
+    const message =
+      error instanceof Error
+        ? encodeURIComponent(error.message)
+        : "unknown_error";
+
+    res.redirect(
+      `${frontendUrl}/settings?google=error&reason=${message}`
+    );
   }
 });
 

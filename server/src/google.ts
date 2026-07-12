@@ -89,8 +89,25 @@ export async function handleGoogleCallback(code: string, userId: string) {
 
   const oauth2Client = getOAuthClient();
 
-  const { tokens } = await oauth2Client.getToken(code);
-  oauth2Client.setCredentials(tokens);
+    let tokens;
+
+    try {
+      const tokenResponse = await oauth2Client.getToken(code);
+      tokens = tokenResponse.tokens;
+    } catch (error) {
+      console.error("Google token exchange failed", {
+        redirectUri: getRedirectUri(),
+        clientIdSuffix: process.env.GOOGLE_CLIENT_ID?.slice(-20),
+        message:
+          error instanceof Error
+            ? error.message
+            : String(error),
+      });
+
+      throw error;
+    }
+
+oauth2Client.setCredentials(tokens);
 
   const oauth2 = google.oauth2({
     version: "v2",
@@ -124,14 +141,13 @@ export async function handleGoogleCallback(code: string, userId: string) {
   });
 
   await prisma.user.update({
-    where: { id: userId },
-    data: {
-      email: profile.data.email ?? undefined,
-      provider: "google",
-      calendarConnected: true,
-      calendarPermission: "write",
-    },
-  });
+      where: { id: userId },
+      data: {
+        provider: "google",
+        calendarConnected: true,
+        calendarPermission: "write",
+      },
+    });
 
   return {
     ok: true,
