@@ -31,7 +31,6 @@ import {
   recordCheckin,
   refreshWakePlan,
   startFocusBlock,
-  trackEvent,
   undoAction,
   updateRules,
 } from "./coach";
@@ -41,6 +40,7 @@ import { processCalendarWriteQueue } from "./calendarWriteQueue";
 import { getWeeklyInsights } from "./insights";
 import { retryCalendarWrites } from "./retryQueue";
 import { getAdminAnalytics } from "./adminAnalytics";
+import { trackAnalytics } from "./analytics";
 import {
   createTask,
   listTasks,
@@ -487,12 +487,22 @@ app.post(
   }),
   async (req, res, next) => {
     try {
-      const event = await trackEvent(
+      const userId = getRequestUserId(req);
+
+      await ensureUser(userId);
+
+      const event = await trackAnalytics(
+        userId,
         req.body?.name ?? req.body?.eventName ?? "unknown_event",
         req.body?.payload ?? {}
       );
-      res.json({ ok: true, event });
+
+      res.json({
+        ok: true,
+        event,
+      });
     } catch (error) {
+      console.error("Analytics tracking failed:", error);
       next(error);
     }
   }
