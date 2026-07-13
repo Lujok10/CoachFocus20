@@ -1184,20 +1184,28 @@ export async function listCalendarEvents(
 }
 
 export async function recordCheckin(input: {
-  focusBlockId: string;
-  result: "crushed" | "meh" | "missed";
-  needleMover: "yes" | "somewhat" | "no" | "unconfirmed";
-  noteText?: string;
-}) {
-  const focusBlock = await prisma.focusBlock.findUnique({
-    where: {
-      id: input.focusBlockId,
-    },
-  });
+    focusBlockId: string;
+    result: "crushed" | "meh" | "missed";
+    needleMover: "yes" | "somewhat" | "no" | "unconfirmed";
+    noteText?: string;
+  }) {
+    const focusBlock = await prisma.focusBlock.findUnique({
+      where: {
+        id: input.focusBlockId,
+      },
+    });
 
   if (!focusBlock) {
-    throw new Error("Focus block not found.");
-  }
+      const error = new Error(
+        "This focus session is no longer available. Start a new focus block and try again."
+      );
+
+      Object.assign(error, {
+        statusCode: 404,
+      });
+
+      throw error;
+    }
 
   const status = input.result === "missed" ? "missed" : "completed";
 

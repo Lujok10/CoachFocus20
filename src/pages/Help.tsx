@@ -10,12 +10,18 @@ import {
 type HelpProps = {
   onReplayOnboarding: () => void;
   onBack: () => void;
+  onOpenPrivacy: () => void;
+  onOpenTerms: () => void;
 };
+
 
 export function Help({
   onReplayOnboarding,
   onBack,
+  onOpenPrivacy,
+  onOpenTerms,
 }: HelpProps) {
+
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
       <header className="border-b border-slate-200 bg-white">
@@ -187,11 +193,21 @@ export function Help({
           </div>
         </section>
 
-        <button
-          type="button"
-          onClick={onReplayOnboarding}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-4 text-sm font-black text-white hover:bg-indigo-700"
-        >
+       <button
+            type="button"
+            onClick={onOpenPrivacy}
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-bold text-slate-700 hover:bg-slate-50"
+          >
+            Privacy Policy
+          </button>
+
+          <button
+            type="button"
+            onClick={onOpenTerms}
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-bold text-slate-700 hover:bg-slate-50"
+          >
+            Terms of Service
+
           <RefreshCcw className="h-4 w-4" />
           Replay Onboarding
         </button>

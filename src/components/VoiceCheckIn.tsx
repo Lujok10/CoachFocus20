@@ -54,7 +54,27 @@ export function VoiceCheckIn({ focusBlockId, onClose }: VoiceCheckInProps) {
         needleMover,
         noteText: noteWithGoal || undefined,
       });
-    } catch {
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to save check-in.";
+
+      const isMissingFocusBlock =
+            message.toLowerCase().includes("focus block not found") ||
+            message.toLowerCase().includes("focus session is no longer available");
+
+      if (isMissingFocusBlock) {
+        localStorage.removeItem("focus20_current_goal");
+        localStorage.removeItem("focus20_wakePlan");
+        localStorage.removeItem("focus20_wakePlan_cache");
+
+        window.alert(
+          "This focus session is no longer available. Please start a new focus block."
+        );
+
+        onClose();
+        return;
+      }
+
       enqueueOfflineJob("voice_checkin", {
         focusBlockId,
         result,

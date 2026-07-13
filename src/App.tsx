@@ -7,6 +7,8 @@ import { Insights } from "./pages/Insights";
 import { Settings } from "./pages/Settings";
 import { AdminAnalytics } from "./pages/AdminAnalytics";
 import { Help } from "./pages/Help";
+import { Privacy } from "./pages/Privacy";
+import { Terms } from "./pages/Terms";
 import { Navigation } from "./components/Navigation";
 import { WakeScreen } from "./components/WakeScreen";
 import { DetailsScreen } from "./components/DetailsScreen";
@@ -30,6 +32,8 @@ export type TabType =
   | "insights"
   | "settings"
   | "help"
+  | "privacy"
+  | "terms"
   | "admin-analytics";
 
 export default function App() {
@@ -298,9 +302,11 @@ if (error) {
               </div>
             ))}
 
-          {activeTab === "help" && (
+         {activeTab === "help" && (
               <Help
                 onBack={() => setActiveTab("settings")}
+                onOpenPrivacy={() => setActiveTab("privacy")}
+                onOpenTerms={() => setActiveTab("terms")}
                 onReplayOnboarding={() => {
                   localStorage.removeItem("focus20_onboarding_completed");
                   setShowOnboarding(true);
@@ -309,8 +315,16 @@ if (error) {
               />
             )}
 
+            {activeTab === "privacy" && (
+              <Privacy onBack={() => setActiveTab("help")} />
+            )}
+
           {activeTab === "settings" && (
             <Settings onOpenHelp={() => setActiveTab("help")} />
+              )}
+
+              {activeTab === "terms" && (
+                <Terms onBack={() => setActiveTab("help")} />
               )}
 
               {activeTab === "admin-analytics" &&
@@ -394,6 +408,14 @@ if (error) {
             if (googleConnectUrl) {
               window.location.href = googleConnectUrl;
             }
+          }}
+          onOpenPrivacy={() => {
+            setShowOnboarding(false);
+            setActiveTab("privacy");
+          }}
+          onOpenTerms={() => {
+            setShowOnboarding(false);
+            setActiveTab("terms");
           }}
         />
       )}
