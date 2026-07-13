@@ -5,6 +5,7 @@ import { unlockAudio } from "./services/sounds";
 import { Calendar } from "./pages/Calendar";
 import { Insights } from "./pages/Insights";
 import { Settings } from "./pages/Settings";
+import { Sentry } from "./lib/sentry";
 import { AdminAnalytics } from "./pages/AdminAnalytics";
 import { Help } from "./pages/Help";
 import { Privacy } from "./pages/Privacy";
@@ -101,6 +102,12 @@ export default function App() {
         );
       };
 
+ useEffect(() => {
+      Sentry.captureException(
+        new Error("Focus20 Sentry test")
+      );
+    }, []);     
+    
       document.addEventListener(
         "pointerdown",
         enableAudio,

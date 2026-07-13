@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { ClerkProvider } from "@clerk/clerk-react";
+import "./lib/sentry";
 import App from "./App";
 import "./index.css";
 import { reconcileAfterReconnect } from "./services/offlineSync";
 import { UpdateAvailablePrompt } from "./components/UpdateAvailablePrompt";
+import { initializeSentry } from "./services/sentry";import { Sentry } from "./services/sentry";
 
+initializeSentry();
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 if (!clerkPubKey) {
@@ -80,14 +83,38 @@ function Root() {
   return (
     <React.StrictMode>
       <ClerkProvider publishableKey={clerkPubKey} afterSignOutUrl="/">
-        <App />
+        <Sentry.ErrorBoundary
+          fallback={
+            <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+              <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+                <h1 className="text-xl font-black text-slate-900">
+                  Focus20 encountered an error
+                </h1>
 
-        {showUpdate && (
-          <UpdateAvailablePrompt
-            onUpdate={updateApp}
-            onDismiss={() => setShowUpdate(false)}
-          />
-        )}
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  The problem has been reported. Refresh the app and try again.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="mt-5 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white hover:bg-slate-800"
+                >
+                  Reload Focus20
+                </button>
+              </div>
+            </div>
+          }
+        >
+          <App />
+
+          {showUpdate && (
+            <UpdateAvailablePrompt
+              onUpdate={updateApp}
+              onDismiss={() => setShowUpdate(false)}
+            />
+          )}
+        </Sentry.ErrorBoundary>
       </ClerkProvider>
     </React.StrictMode>
   );
