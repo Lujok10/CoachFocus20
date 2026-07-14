@@ -695,13 +695,13 @@ export function Settings({ onOpenHelp }: SettingsProps) {
               <Trash2 className="h-4 w-4" />
               Clear User History
             </button>
-            <button
+            {/* <button
   onClick={() => {
     throw new Error("Button crash test");
   }}
 >
   Crash App
-</button>
+</button> */}
           </div>
         </Section>
       </div>
