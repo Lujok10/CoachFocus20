@@ -1,14 +1,18 @@
 import * as Sentry from "@sentry/react";
 
-if (import.meta.env.PROD && import.meta.env.VITE_SENTRY_DSN) {
+const dsn = import.meta.env.VITE_SENTRY_DSN;
+
+if (dsn) {
   Sentry.init({
-    dsn: import.meta.env.VITE_SENTRY_DSN,
-
-    integrations: [],
-
-    tracesSampleRate: 1.0,
-
+    dsn,
     environment: import.meta.env.MODE,
+    enabled: import.meta.env.PROD,
+
+    integrations: [
+      Sentry.browserTracingIntegration(),
+    ],
+
+    tracesSampleRate: 0.1,
   });
 }
 
