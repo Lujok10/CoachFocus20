@@ -11,6 +11,28 @@ export function unlockAudio() {
   console.log("Audio unlocked.");
 }
 
+
+let timerCompleteAudio: HTMLAudioElement | null = null;
+
+export async function playTimerCompleteSound() {
+  try {
+    if (!timerCompleteAudio) {
+      timerCompleteAudio = new Audio(
+        "/sounds/timer-complete.mp3"
+      );
+      timerCompleteAudio.preload = "auto";
+      timerCompleteAudio.volume = 1;
+    }
+
+    timerCompleteAudio.pause();
+    timerCompleteAudio.currentTime = 0;
+
+    await timerCompleteAudio.play();
+  } catch (error) {
+    console.warn("Timer completion sound failed:", error);
+  }
+}
+
 export function playTaskCompletedSound() {
   try {
     if ("vibrate" in navigator) {

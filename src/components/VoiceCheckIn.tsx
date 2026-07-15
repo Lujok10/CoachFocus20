@@ -107,16 +107,18 @@ export function VoiceCheckIn({ focusBlockId, onClose }: VoiceCheckInProps) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-900/95 p-6"
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/95"
     >
       <button
-        onClick={onClose}
-        className="absolute right-6 top-6 p-2 text-slate-400 transition-colors hover:text-white"
-      >
+          type="button"
+          onClick={onClose}
+          className="fixed right-4 top-4 z-[60] rounded-full bg-slate-800/90 p-2 text-slate-300 shadow-lg transition-colors hover:bg-slate-700 hover:text-white"
+          aria-label="Close check-in"
+        >
         <X className="h-6 w-6" />
       </button>
 
-      <div className="w-full max-w-md">
+      <div className="mx-auto flex min-h-full w-full max-w-md flex-col px-4 pb-32 pt-20 sm:px-6">
         {submitted ? (
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
@@ -269,15 +271,23 @@ export function VoiceCheckIn({ focusBlockId, onClose }: VoiceCheckInProps) {
               </p>
             </div>
 
-            {canSubmit && (
+            <div className="sticky bottom-0 z-20 -mx-4 mt-6 border-t border-slate-700 bg-slate-900/95 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4 backdrop-blur sm:-mx-6 sm:px-6">
               <button
+                type="button"
                 onClick={handleSubmit}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 font-medium text-white transition-colors hover:bg-emerald-600"
+                disabled={!canSubmit}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 font-medium text-white transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
               >
                 <Check className="h-5 w-5" />
                 Submit Check-in
               </button>
-            )}
+
+              {!canSubmit && (
+                <p className="mt-2 text-center text-xs text-slate-400">
+                  Complete the required selections above to submit.
+                </p>
+              )}
+            </div>
           </>
         )}
       </div>

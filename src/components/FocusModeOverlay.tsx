@@ -8,6 +8,7 @@ import { apiTrackEvent } from "../services/apiClient";
 import { playTaskCompletedSound } from "../services/sounds";
 import confetti from "canvas-confetti";
 import { invalidateWakePlanCache } from "../hooks/useWakePlan";
+import { playTimerCompleteSound } from "../services/sounds";
 interface FocusModeOverlayProps {
   wakePlan: WakePlan;
   onClose: () => void;
@@ -121,47 +122,66 @@ export function FocusModeOverlay({
     wakePlan.lever?.title,
   ]);
 
-  useEffect(() => {
-    if (!isRunning || isComplete) return;
+useEffect(() => {
+  if (!isRunning || isComplete) return;
 
-    const tick = () => {
-      const remaining = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+  const tick = () => {
+    const remaining = Math.max(
+      0,
+      Math.ceil((endAt - Date.now()) / 1000)
+    );
 
-      setSecondsLeft(remaining);
+    setSecondsLeft(remaining);
 
-      if (remaining <= 0 && !completedRef.current) {
-        completedRef.current = true;
-        localStorage.removeItem(timerStorageKey);
-        setIsRunning(false);
-        setIsComplete(true);
+    if (remaining <= 0 && !completedRef.current) {
+      completedRef.current = true;
 
-        showLocalNotification("Focus20 session complete", {
-          body: "Great work. Complete your quick check-in.",
-        });
+      playTimerCompleteSound();
+
+      if ("vibrate" in navigator) {
+        navigator.vibrate([300, 150, 300]);
       }
-    };
 
+      localStorage.removeItem(timerStorageKey);
+      setIsRunning(false);
+      setIsComplete(true);
+
+      showLocalNotification("Focus20 session complete", {
+        body: "Great work. Complete your quick check-in.",
+      });
+    }
+  };
+
+  tick();
+
+  const interval = window.setInterval(tick, 1000);
+
+  const handleVisibilityChange = () => {
     tick();
+  };
 
-    const interval = window.setInterval(tick, 1000);
+  const handleFocus = () => {
+    tick();
+  };
 
-    const handleVisibilityChange = () => {
-      tick();
-    };
+  document.addEventListener(
+    "visibilitychange",
+    handleVisibilityChange
+  );
 
-    const handleFocus = () => {
-      tick();
-    };
+  window.addEventListener("focus", handleFocus);
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("focus", handleFocus);
+  return () => {
+    window.clearInterval(interval);
 
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("focus", handleFocus);
-    };
-  }, [endAt, isRunning, isComplete, timerStorageKey]);
+    document.removeEventListener(
+      "visibilitychange",
+      handleVisibilityChange
+    );
+
+    window.removeEventListener("focus", handleFocus);
+  };
+}, [endAt, isRunning, isComplete, timerStorageKey]);
 
   const toggleRunning = () => {
     if (isComplete) return;
