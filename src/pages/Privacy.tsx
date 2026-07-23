@@ -113,9 +113,11 @@ export function Privacy({ onBack }: PrivacyProps) {
           </p>
 
           <p>
-            Voice recordings or transcripts may be processed to understand your
-            focus-session outcome and generate coaching feedback. Depending on
-            the feature being used, this processing may involve OpenAI.
+              Voice recordings or transcripts may be processed only when you
+              initiate a voice check-in, for the purpose of understanding your
+              focus-session outcome and generating coaching feedback. This
+              processing may involve third party AI service providers such as
+              OpenAI where required to provide the requested feature.
           </p>
         </PolicySection>
 
@@ -176,6 +178,30 @@ export function Privacy({ onBack }: PrivacyProps) {
           </p>
         </PolicySection>
 
+        <PolicySection title="Account and Data Deletion">
+            <p>
+              You may request deletion of your Focus20 account and associated
+              personal data at any time.
+            </p>
+
+            <p>
+              To request deletion, use the account or privacy controls available
+              within Focus20, or email:
+            </p>
+
+            <a
+              href="mailto:focus20.ai.coach@gmail.com?subject=Focus20%20Account%20Deletion%20Request"
+              className="font-bold text-indigo-600 hover:text-indigo-700"
+            >
+              focus20.ai.coach@gmail.com
+            </a>
+
+            <p>
+              We may retain limited information when required for legal,
+              security, fraud-prevention, or legitimate recordkeeping purposes.
+            </p>
+          </PolicySection>
+
         <PolicySection title="Security">
           <p>
             Focus20 uses reasonable technical and organizational safeguards to
@@ -211,11 +237,6 @@ export function Privacy({ onBack }: PrivacyProps) {
             focus20.ai.coach@gmail.com
           </a>
         </PolicySection>
-
-        <p className="px-4 text-center text-xs leading-5 text-slate-400">
-          This page is a general application-policy template and should be
-          reviewed by a qualified attorney before a large public launch.
-        </p>
       </main>
     </div>
   );

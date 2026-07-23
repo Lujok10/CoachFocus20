@@ -37,8 +37,35 @@ export type TabType =
   | "admin-analytics";
 
 export default function App() {
+    const path = window.location.pathname.replace(/\/+$/, "") || "/";
+
+    if (path === "/privacy") {
+      return (
+        <Privacy
+          onBack={() => {
+            window.location.href = "/";
+          }}
+        />
+      );
+    }
+
+    if (path === "/terms") {
+      return (
+        <Terms
+          onBack={() => {
+            window.location.href = "/";
+          }}
+        />
+      );
+    }
+
+    return <AuthenticatedApp />;
+  }
+
+function AuthenticatedApp() {
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
+
 
   const [authReady, setAuthReady] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("home");
@@ -361,21 +388,26 @@ if (error) {
 
       {showSuccessTarget && (
       <SuccessTargetModal
-        goal={sessionGoal}
-        onGoalChange={setSessionGoal}
-        onCancel={() => setShowSuccessTarget(false)}
-        onStart={() => {
-          localStorage.setItem(
-            "focus20_current_goal",
-            sessionGoal
-          );
+          goal={sessionGoal}
+          onGoalChange={setSessionGoal}
+          onCancel={() => setShowSuccessTarget(false)}
+          onStart={() => {
+            // Important:
+            // This runs directly from the user's Start button gesture.
+            // Unlock both completion sounds before the timer begins.
+            unlockAudio();
 
-          updateStatus("started");
+            localStorage.setItem(
+              "focus20_current_goal",
+              sessionGoal
+            );
 
-          setShowSuccessTarget(false);
-          setShowFocusMode(true);
-        }}
-      />
+            updateStatus("started");
+
+            setShowSuccessTarget(false);
+            setShowFocusMode(true);
+          }}
+        />
     )}
 
       <AnimatePresence>

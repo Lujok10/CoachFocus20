@@ -5,10 +5,15 @@ import { WakePlan } from "../types";
 import { showLocalNotification } from "../services/pwaNotifications";
 import { VoiceCheckinRecorder } from "./VoiceCheckinRecorder";
 import { apiTrackEvent } from "../services/apiClient";
-import { playTaskCompletedSound } from "../services/sounds";
+
 import confetti from "canvas-confetti";
 import { invalidateWakePlanCache } from "../hooks/useWakePlan";
-import { playTimerCompleteSound } from "../services/sounds";
+import {
+  playTaskCompletedSound,
+  playTimerCompleteSound,
+} from "../services/sounds";
+
+
 interface FocusModeOverlayProps {
   wakePlan: WakePlan;
   onClose: () => void;
@@ -133,22 +138,28 @@ useEffect(() => {
 
     setSecondsLeft(remaining);
 
-    if (remaining <= 0 && !completedRef.current) {
+      if (remaining <= 0 && !completedRef.current) {
       completedRef.current = true;
 
-      playTimerCompleteSound();
+      console.log("Focus20 timer reached 00:00");
+
+      void playTimerCompleteSound();
 
       if ("vibrate" in navigator) {
         navigator.vibrate([300, 150, 300]);
       }
 
       localStorage.removeItem(timerStorageKey);
+
       setIsRunning(false);
       setIsComplete(true);
 
-      showLocalNotification("Focus20 session complete", {
-        body: "Great work. Complete your quick check-in.",
-      });
+      showLocalNotification(
+        "Focus20 session complete",
+        {
+          body: "Great work. Complete your quick check-in.",
+        }
+      );
     }
   };
 
