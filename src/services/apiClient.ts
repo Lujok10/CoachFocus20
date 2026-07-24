@@ -328,6 +328,16 @@ export async function apiClearUserHistory() {
   );
 }
 
+
+export async function apiDeleteAccount() {
+  return request<{
+    ok: boolean;
+    message: string;
+  }>("/api/user/delete-account", {
+    method: "DELETE",
+  });
+}
+
 export async function apiTrackEvent(
   name: string,
   payload?: Record<string, unknown>

@@ -14,6 +14,7 @@ import {
 
 import {
   apiClearUserHistory,
+  apiDeleteAccount,
   apiDisconnectGoogle,
   apiGetUserRules,
   apiGoogleStatus,
@@ -29,7 +30,7 @@ import {
 } from "../services/pushNotifications";
 
 import { usePwaInstall } from "../hooks/usePwaInstall";
-
+import { useClerk } from "@clerk/clerk-react";
 import {
   unlockAudio,
   playTaskCompletedSound,
@@ -167,6 +168,10 @@ export function Settings({ onOpenHelp }: SettingsProps) {
   const [isWorking, setIsWorking] = useState(false);
   const [message, setMessage] = useState("");
   const [googleStatus, setGoogleStatus] = useState<any>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const { signOut } = useClerk();
   const { canInstall, install } = usePwaInstall();
   const loadSettings = async () => {
     try {
@@ -240,6 +245,37 @@ export function Settings({ onOpenHelp }: SettingsProps) {
       setIsWorking(false);
     }
   };
+
+  const handleDeleteAccount = async () => {
+      if (deleteConfirmText.trim().toUpperCase() !== "DELETE") {
+        setMessage('Type "DELETE" to confirm account deletion.');
+        return;
+      }
+
+      setIsDeletingAccount(true);
+      setMessage("");
+
+      try {
+        await apiDeleteAccount();
+
+        localStorage.clear();
+        sessionStorage.clear();
+
+        await signOut();
+
+        window.location.href = "/";
+      } catch (error) {
+        console.error("Failed to delete account", error);
+
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "Account deletion failed. Please try again."
+        );
+
+        setIsDeletingAccount(false);
+      }
+    };
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
@@ -368,27 +404,27 @@ export function Settings({ onOpenHelp }: SettingsProps) {
                 </div>
               )}
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-100">
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-              Calendar Provider
-            </p>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-100">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  Calendar Provider
+                </p>
 
-            <select
-              value={rules.provider}
-              onChange={(e) =>
-                updateRules({
-                  provider: e.target.value as Rules["provider"],
-                  calendarConnected: e.target.value !== "local",
-                })
-              }
-              className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-            >
-              <option value="local">Local</option>
-              <option value="google">Google</option>
-              <option value="microsoft">Microsoft</option>
-            </select>
-          </div>
+                <select
+                  value={rules.provider}
+                  onChange={(e) =>
+                    updateRules({
+                      provider: e.target.value as Rules["provider"],
+                      calendarConnected: e.target.value !== "local",
+                    })
+                  }
+                  className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="local">Local</option>
+                  <option value="google">Google</option>
+                  <option value="microsoft">Microsoft</option>
+                </select>
+              </div>
 
             <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-100">
               <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -443,6 +479,16 @@ export function Settings({ onOpenHelp }: SettingsProps) {
                 </div>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={async () => {
+                await signOut();
+                window.location.href = "/";
+              }}
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
+            >
+              Sign Out
+            </button>
             </Section>
 
               <Section title="AI Safety Rules" icon={<Shield className="h-4 w-4" />}>
@@ -695,16 +741,94 @@ export function Settings({ onOpenHelp }: SettingsProps) {
               <Trash2 className="h-4 w-4" />
               Clear User History
             </button>
-            {/* <button
-  onClick={() => {
-    throw new Error("Button crash test");
-  }}
->
-  Crash App
-</button> */}
+            <div className="border-t border-slate-200 pt-4">
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+                <p className="text-sm font-black text-red-900">
+                  Delete Account
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-red-700">
+                  Permanently delete your Focus20 account and associated data.
+                  This action cannot be undone.
+                </p>
+
+                <button
+                  type="button"
+                  disabled={isWorking || isDeletingAccount}
+                  onClick={() => {
+                    setDeleteConfirmText("");
+                    setShowDeleteConfirm(true);
+                  }}
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete Account
+                </button>
+              </div>
+            </div>
+  
           </div>
         </Section>
       </div>
+      {showDeleteConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+            <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+                <Trash2 className="h-6 w-6 text-red-600" />
+              </div>
+
+              <h2 className="mt-4 text-xl font-black text-slate-900">
+                Permanently delete account?
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                This will permanently delete your Focus20 account, tasks,
+                focus history, preferences, analytics, calendar connection,
+                notification data, and other associated account data.
+              </p>
+
+              <p className="mt-4 text-sm font-bold text-slate-800">
+                Type DELETE to confirm:
+              </p>
+
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                disabled={isDeletingAccount}
+                placeholder="DELETE"
+                autoComplete="off"
+                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
+              />
+
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              disabled={isDeletingAccount}
+              onClick={() => {
+                setShowDeleteConfirm(false);
+                setDeleteConfirmText("");
+              }}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              disabled={
+                isDeletingAccount ||
+                deleteConfirmText.trim().toUpperCase() !== "DELETE"
+              }
+              onClick={handleDeleteAccount}
+              className="rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isDeletingAccount ? "Deleting..." : "Delete Forever"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 }

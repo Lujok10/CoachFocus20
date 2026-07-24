@@ -2,7 +2,6 @@ import "dotenv/config";
 
 import cors from "cors";
 import express from "express";
-import { clerkMiddleware } from "@clerk/express";
 import multer from "multer";
 import fs from "fs";
 import os from "os";
@@ -66,6 +65,11 @@ import {
   getRecoverySuggestion,
   autoRescheduleMissedWork,
 } from "./recovery";
+
+import {
+  clerkClient,
+  clerkMiddleware,
+} from "@clerk/express";
 
 const env = validateEnv();
 const PORT = Number(process.env.PORT || env.apiPort || 8787);
@@ -880,6 +884,40 @@ app.post("/api/recovery/reschedule", strictWriteLimiter, async (req, res, next) 
     next(error);
   }
 });
+
+app.delete(
+  "/api/user/delete-account",
+  strictWriteLimiter,
+  async (req, res, next) => {
+    try {
+      const userId = getRequestUserId(req);
+
+      // 1. Delete the user's Clerk authentication account first.
+      await clerkClient.users.deleteUser(userId);
+
+      // 2. Delete the Focus20 database user.
+      // Related records are removed through Prisma cascade deletes.
+      await prisma.user.deleteMany({
+        where: {
+          id: userId,
+        },
+      });
+
+      res.status(200).json({
+        ok: true,
+        message:
+          "Your Focus20 account and associated data were permanently deleted.",
+      });
+    } catch (error) {
+      console.error(
+        "Account deletion failed:",
+        error instanceof Error ? error.message : error
+      );
+
+      next(error);
+    }
+  }
+);
 
 app.use(
   (
