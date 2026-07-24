@@ -21,6 +21,7 @@ import { ErrorState } from "./components/ErrorState";
 import { useLoadingTimeout } from "./components/LoadingTimeout";
 import { useWakePlan } from "./hooks/useWakePlan";
 import { scheduleFocusReminder } from "./services/notifications";
+import DeleteAccountPage from "./components/DeleteAccountPage";
 import {
   getGoogleConnectUrl,
   setClerkTokenProvider,
@@ -37,27 +38,30 @@ export type TabType =
   | "admin-analytics";
 
 export default function App() {
+  if (window.location.pathname === "/delete-account") {
+        return <DeleteAccountPage />;
+      }
     const path = window.location.pathname.replace(/\/+$/, "") || "/";
 
-    if (path === "/privacy") {
-      return (
-        <Privacy
-          onBack={() => {
-            window.location.href = "/";
-          }}
-        />
-      );
-    }
+        if (path === "/privacy") {
+          return (
+            <Privacy
+              onBack={() => {
+                window.location.href = "/";
+              }}
+            />
+          );
+        }
 
-    if (path === "/terms") {
-      return (
-        <Terms
-          onBack={() => {
-            window.location.href = "/";
-          }}
-        />
-      );
-    }
+        if (path === "/terms") {
+          return (
+            <Terms
+              onBack={() => {
+                window.location.href = "/";
+              }}
+            />
+          );
+        }
 
     return <AuthenticatedApp />;
   }
