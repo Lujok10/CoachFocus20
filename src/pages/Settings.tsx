@@ -174,6 +174,7 @@ export function Settings({ onOpenHelp }: SettingsProps) {
   const { signOut } = useClerk();
   const { canInstall, install } = usePwaInstall();
   const loadSettings = async () => {
+
     try {
       const remoteRules = await apiGetUserRules();
       setRules({ ...defaultRules, ...remoteRules });
@@ -190,9 +191,37 @@ export function Settings({ onOpenHelp }: SettingsProps) {
       setGoogleConnectUrl("");
     }
 
-    apiGoogleStatus()
-  .then(setGoogleStatus)
-  .catch(() => setGoogleStatus(null));
+   try {
+      const status = await apiGoogleStatus();
+
+      setGoogleStatus(status);
+
+      // Save the last confirmed calendar status for the Android app.
+      localStorage.setItem(
+        "focus20_google_calendar_status",
+        JSON.stringify(status)
+      );
+    } catch (error) {
+      console.error("Failed to verify Google Calendar status", error);
+
+      // Keep the last confirmed status instead of showing disconnected.
+      const cachedStatus = localStorage.getItem(
+        "focus20_google_calendar_status"
+      );
+
+      if (cachedStatus) {
+        try {
+          setGoogleStatus(JSON.parse(cachedStatus));
+        } catch (parseError) {
+          console.error(
+            "Failed to read cached Google Calendar status",
+            parseError
+          );
+        }
+      }
+
+      // Do not call setGoogleStatus(null) here.
+    }
   };
 
   useEffect(() => {
@@ -200,10 +229,17 @@ export function Settings({ onOpenHelp }: SettingsProps) {
 
     const params = new URLSearchParams(window.location.search);
 
-    if (params.get("calendar") === "connected") {
-      window.history.replaceState({}, "", window.location.pathname);
-      loadSettings();
+      if (params.get("calendar") === "connected") {
+        window.history.replaceState({}, "", window.location.pathname);
+
+        localStorage.setItem(
+          "focus20_google_calendar_connected",
+          "true"
+        );
+
+        loadSettings();
     }
+
   }, []);
     const resetOnboarding = () => {
       localStorage.removeItem("focus20_onboarding_completed");
