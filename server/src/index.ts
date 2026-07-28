@@ -81,35 +81,31 @@ app.set("trust proxy", 1);
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
-const allowedOrigins = [
-  CLIENT_URL,
-  process.env.CLIENT_URL,
-  process.env.FRONTEND_ORIGIN,
-  "https://coach-focus20.vercel.app",
-  "https://coach-focus20-hisa908gf-noel-nyirenda-s-projects.vercel.app",
-  "http://localhost:5173",
-  "http://localhost:5174",
-  "http://localhost:5175",
-].filter(Boolean) as string[];
-
-function isAllowedOrigin(origin?: string): boolean {
-  // Allow requests without an Origin header, such as server-to-server requests.
-  if (!origin) {
-    return true;
-  }
-
-  const allowedOrigins = new Set([
+const allowedOrigins = new Set(
+  [
+    CLIENT_URL,
+    process.env.CLIENT_URL,
+    process.env.FRONTEND_ORIGIN,
     "https://coach-focus20.vercel.app",
+    "https://coach-focus20-hisa908gf-noel-nyirenda-s-projects.vercel.app",
     "https://localhost",
     "http://localhost",
     "capacitor://localhost",
-  ]);
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+  ].filter(Boolean) as string[]
+);
+
+function isAllowedOrigin(origin?: string): boolean {
+  if (!origin) {
+    return true;
+  }
 
   if (allowedOrigins.has(origin)) {
     return true;
   }
 
-  // Allow Vercel preview deployments.
   try {
     const url = new URL(origin);
 
@@ -122,11 +118,8 @@ function isAllowedOrigin(origin?: string): boolean {
   }
 }
 
-const corsOptions = {
-  origin(
-    origin: string | undefined,
-    callback: (error: Error | null, allow?: boolean) => void
-  ) {
+const corsOptions: cors.CorsOptions = {
+  origin(origin, callback) {
     if (isAllowedOrigin(origin)) {
       callback(null, true);
       return;
@@ -136,16 +129,16 @@ const corsOptions = {
     callback(new Error(`Origin is not allowed by CORS: ${origin}`));
   },
   credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: [
     "Content-Type",
     "Authorization",
     "x-cron-secret",
   ],
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  optionsSuccessStatus: 204,
 };
 
 app.use(cors(corsOptions));
-app.options("/{*splat}", cors(corsOptions));
 
 app.use(clerkMiddleware());
 
