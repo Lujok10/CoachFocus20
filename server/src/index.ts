@@ -92,34 +92,60 @@ const allowedOrigins = [
   "http://localhost:5175",
 ].filter(Boolean) as string[];
 
-function isAllowedOrigin(origin?: string) {
-  if (!origin) return true;
-  if (allowedOrigins.includes(origin)) return true;
+function isAllowedOrigin(origin?: string): boolean {
+  // Allow requests without an Origin header, such as server-to-server requests.
+  if (!origin) {
+    return true;
+  }
 
+  const allowedOrigins = new Set([
+    "https://coach-focus20.vercel.app",
+    "https://localhost",
+    "http://localhost",
+    "capacitor://localhost",
+  ]);
+
+  if (allowedOrigins.has(origin)) {
+    return true;
+  }
+
+  // Allow Vercel preview deployments.
   try {
     const url = new URL(origin);
-    return url.protocol === "https:" && url.hostname.endsWith(".vercel.app");
+
+    return (
+      url.protocol === "https:" &&
+      url.hostname.endsWith(".vercel.app")
+    );
   } catch {
     return false;
   }
 }
 
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (isAllowedOrigin(origin)) {
-        callback(null, true);
-        return;
-      }
-      callback(new Error("Origin is not allowed by CORS."));
-    },
-    credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization", "x-cron-secret"],
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  })
-);
+const corsOptions = {
+  origin(
+    origin: string | undefined,
+    callback: (error: Error | null, allow?: boolean) => void
+  ) {
+    if (isAllowedOrigin(origin)) {
+      callback(null, true);
+      return;
+    }
 
-app.options("/{*splat}", cors());
+    console.error("Blocked CORS origin:", origin);
+    callback(new Error(`Origin is not allowed by CORS: ${origin}`));
+  },
+  credentials: true,
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "x-cron-secret",
+  ],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+};
+
+app.use(cors(corsOptions));
+app.options("/{*splat}", cors(corsOptions));
 
 app.use(clerkMiddleware());
 
