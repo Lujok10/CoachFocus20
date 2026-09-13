@@ -82,7 +82,12 @@ function Root() {
 
   return (
     <React.StrictMode>
-      <ClerkProvider publishableKey={clerkPubKey} afterSignOutUrl="/">
+      <ClerkProvider
+      publishableKey={clerkPubKey}
+      proxyUrl="https://coach-focus20.vercel.app/__clerk"
+      clerkJSVersion="5.127.2"
+      afterSignOutUrl="/"
+    >
         <Sentry.ErrorBoundary
           fallback={
             <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
