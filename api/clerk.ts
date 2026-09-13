@@ -1,25 +1,84 @@
-import express from "express";
-import { clerkMiddleware } from "@clerk/express";
+import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
+import { Readable } from "node:stream";
+import { clerkFrontendApiProxy } from "@clerk/backend/proxy";
 
-const app = express();
+export default async function handler(
+  req: ExpressRequest,
+  res: ExpressResponse
+) {
+  try {
+    const path =
+      typeof req.query.path === "string" ? req.query.path : "";
 
-app.use((req, _res, next) => {
-  const path = typeof req.query.path === "string" ? req.query.path : "";
+    const searchParams = new URLSearchParams();
 
-  if (path) {
-    req.url = `/__clerk/${path}`;
+    for (const [key, value] of Object.entries(req.query)) {
+      if (key === "path") continue;
+
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (typeof item === "string") {
+            searchParams.append(key, item);
+          }
+        }
+      } else if (typeof value === "string") {
+        searchParams.append(key, value);
+      }
+    }
+
+    const query = searchParams.toString();
+    const proxyUrl =
+      `https://coach-focus20.vercel.app/__clerk/${path}` +
+      (query ? `?${query}` : "");
+
+    const headers = new Headers();
+
+    for (const [key, value] of Object.entries(req.headers)) {
+      if (Array.isArray(value)) {
+        headers.set(key, value.join(", "));
+      } else if (value !== undefined) {
+        headers.set(key, value);
+      }
+    }
+
+    const hasBody =
+      req.method !== "GET" &&
+      req.method !== "HEAD" &&
+      req.method !== "OPTIONS";
+
+    const request = new Request(proxyUrl, {
+      method: req.method,
+      headers,
+      body: hasBody
+        ? (Readable.toWeb(req) as ReadableStream)
+        : undefined,
+      duplex: hasBody ? "half" : undefined,
+    } as RequestInit);
+
+    const response = await clerkFrontendApiProxy(request, {
+      proxyPath: "/__clerk",
+      publishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+      secretKey: process.env.CLERK_SECRET_KEY,
+    });
+
+    res.status(response.status);
+
+    response.headers.forEach((value, key) => {
+      res.setHeader(key, value);
+    });
+
+    if (!response.body) {
+      res.end();
+      return;
+    }
+
+    Readable.fromWeb(
+      response.body as import("node:stream/web").ReadableStream
+    ).pipe(res);
+  } catch (error) {
+    console.error("Clerk proxy error:", error);
+    res.status(500).json({
+      error: "Clerk proxy request failed",
+    });
   }
-
-  next();
-});
-
-app.use(
-  clerkMiddleware({
-    frontendApiProxy: {
-      enabled: true,
-      path: "/__clerk",
-    },
-  })
-);
-
-export default app;
+}
