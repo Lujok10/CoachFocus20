@@ -64,8 +64,16 @@ export default async function handler(
     res.status(response.status);
 
     response.headers.forEach((value, key) => {
-      res.setHeader(key, value);
+      if (key.toLowerCase() !== "set-cookie") {
+        res.setHeader(key, value);
+      }
     });
+
+    const setCookies = response.headers.getSetCookie();
+
+    if (setCookies.length > 0) {
+      res.setHeader("Set-Cookie", setCookies);
+    }
 
     if (!response.body) {
       res.end();
