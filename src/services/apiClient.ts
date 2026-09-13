@@ -37,43 +37,45 @@ for (let attempt = 0; attempt < 10; attempt++) {
     ...(isFormData ? {} : { "Content-Type": "application/json" }),
   };
 
-if (token) {
-  headers.Authorization = `Bearer ${token}`;
-}
-
-console.log("Focus20 authentication", {
-  path,
-  hasToken: Boolean(token),
-  tokenPrefix: token ? token.slice(0, 8) : "none",
-});
-
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      ...headers,
-      ...(options.headers as Record<string, string> | undefined),
-    },
-  });
-
-  if (!res.ok) {
-    let message = `API request failed: ${res.status}`;
-
-    try {
-      const body = await res.json();
-      message = body.error || body.message || message;
-    } catch {
-      // Ignore non-JSON errors
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
     }
 
-    throw new Error(message);
-  }
+      let res: Response;
 
-  if (res.status === 204) {
-    return undefined as T;
-  }
+    try {
+      res = await fetch(`${API_BASE_URL}${path}`, {
+        ...options,
+        headers: {
+          ...headers,
+          ...(options.headers as Record<string, string> | undefined),
+        },
+      });
+    } catch {
+      throw new Error(
+        "Unable to connect to Focus20. Please check your internet connection and try again."
+      );
+    }
 
-  return res.json() as Promise<T>;
-}
+      if (!res.ok) {
+        let message = `API request failed: ${res.status}`;
+
+        try {
+          const body = await res.json();
+          message = body.error || body.message || message;
+        } catch {
+          // Ignore non-JSON errors
+        }
+
+        throw new Error(message);
+      }
+
+      if (res.status === 204) {
+        return undefined as T;
+      }
+
+      return res.json() as Promise<T>;
+    }
 
 export async function authFetch<T = unknown>(
   path: string,
