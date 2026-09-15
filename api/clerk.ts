@@ -63,6 +63,12 @@ export default async function handler(
 
     res.status(response.status);
 
+    res.setHeader(
+      "Access-Control-Allow-Origin",
+      "https://app.coach-focus20.vercel.app"
+    );
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+
     response.headers.forEach((value, key) => {
       if (key.toLowerCase() !== "set-cookie") {
         res.setHeader(key, value);
