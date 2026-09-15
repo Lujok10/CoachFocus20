@@ -44,7 +44,8 @@ export default async function handler(
     const hasBody =
       req.method !== "GET" &&
       req.method !== "HEAD" &&
-      req.method !== "OPTIONS";
+      req.method !== "OPTIONS" &&
+      req.method !== "DELETE";
 
     const request = new Request(proxyUrl, {
       method: req.method,
