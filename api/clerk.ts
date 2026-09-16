@@ -62,6 +62,17 @@ export default async function handler(
       secretKey: process.env.CLERK_SECRET_KEY,
     });
 
+    if (!response.ok) {
+      const diagnosticResponse = response.clone();
+      const diagnosticBody = await diagnosticResponse.text();
+
+      console.error("Clerk proxy non-OK response:", {
+        status: response.status,
+        statusText: response.statusText,
+        body: diagnosticBody.slice(0, 1000),
+      });
+    }
+
     res.status(response.status);
 
     res.setHeader(
