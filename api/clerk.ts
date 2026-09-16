@@ -41,6 +41,16 @@ export default async function handler(
       }
     }
 
+    console.log("Clerk incoming request body diagnostic:", {
+      method: req.method,
+      contentType: req.headers["content-type"],
+      contentLength: req.headers["content-length"],
+      readableEnded: req.readableEnded,
+      complete: req.complete,
+      bodyType: typeof req.body,
+      hasParsedBody: req.body !== undefined,
+    });
+
     const hasBody =
       req.method !== "GET" &&
       req.method !== "HEAD" &&
