@@ -196,6 +196,18 @@ export function Settings({ onOpenHelp }: SettingsProps) {
 
       setGoogleStatus(status);
 
+      setRules((currentRules) => ({
+        ...currentRules,
+        calendarConnected: status.connected,
+        provider: status.connected ? "google" : currentRules.provider,
+        calendarPermission:
+          status.permission === "write"
+            ? "write"
+            : status.permission === "limited"
+              ? "read-only"
+              : "none",
+      }));
+
       // Save the last confirmed calendar status for the Android app.
       localStorage.setItem(
         "focus20_google_calendar_status",
@@ -518,8 +530,7 @@ export function Settings({ onOpenHelp }: SettingsProps) {
             <button
               type="button"
               onClick={async () => {
-                await signOut();
-                window.location.href = "/";
+                await signOut({ redirectUrl: "/" });
               }}
               className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
             >
