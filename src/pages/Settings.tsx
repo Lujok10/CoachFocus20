@@ -241,7 +241,7 @@ export function Settings({ onOpenHelp }: SettingsProps) {
 
     const params = new URLSearchParams(window.location.search);
 
-      if (params.get("calendar") === "connected") {
+      if (params.get("google") === "connected") {
         window.history.replaceState({}, "", window.location.pathname);
 
         localStorage.setItem(
