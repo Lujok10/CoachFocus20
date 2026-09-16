@@ -57,12 +57,33 @@ export default async function handler(
       req.method !== "OPTIONS" &&
       req.method !== "DELETE";
 
+    let requestBody: BodyInit | undefined;
+
+    if (hasBody) {
+      if (
+        req.headers["content-type"]?.includes(
+          "application/x-www-form-urlencoded"
+        ) &&
+        req.body &&
+        typeof req.body === "object"
+      ) {
+        requestBody = new URLSearchParams(
+          Object.entries(req.body).map(([key, value]) => [
+            key,
+            String(value),
+          ])
+        ).toString();
+
+        headers.delete("content-length");
+      } else {
+        requestBody = Readable.toWeb(req) as ReadableStream;
+      }
+    }
+
     const request = new Request(proxyUrl, {
       method: req.method,
       headers,
-      body: hasBody
-        ? (Readable.toWeb(req) as ReadableStream)
-        : undefined,
+      body: requestBody,
       duplex: hasBody ? "half" : undefined,
     } as RequestInit);
 
