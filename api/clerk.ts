@@ -90,8 +90,33 @@ export default async function handler(
     Readable.fromWeb(
       response.body as import("node:stream/web").ReadableStream
     ).pipe(res);
-  } catch (error) {
-    console.error("Clerk proxy error:", error);
+     } catch (error) {
+    const err = error as Error & {
+      cause?: {
+        name?: string;
+        message?: string;
+        code?: string;
+        errno?: string | number;
+        syscall?: string;
+        hostname?: string;
+      };
+    };
+
+    console.error("Clerk proxy error:", {
+      name: err?.name,
+      message: err?.message,
+      cause: err?.cause
+        ? {
+            name: err.cause.name,
+            message: err.cause.message,
+            code: err.cause.code,
+            errno: err.cause.errno,
+            syscall: err.cause.syscall,
+            hostname: err.cause.hostname,
+          }
+        : undefined,
+    });
+
     res.status(500).json({
       error: "Clerk proxy request failed",
     });
