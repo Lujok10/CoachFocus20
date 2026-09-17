@@ -107,6 +107,14 @@ export async function handleGoogleCallback(code: string, userId: string) {
       throw error;
     }
 
+  console.log("Google OAuth token exchange succeeded", {
+    userId,
+    hasAccessToken: Boolean(tokens.access_token),
+    hasRefreshToken: Boolean(tokens.refresh_token),
+    hasScope: Boolean(tokens.scope),
+    expiryDatePresent: Boolean(tokens.expiry_date),
+  });
+
 oauth2Client.setCredentials(tokens);
 
   const oauth2 = google.oauth2({
@@ -120,7 +128,7 @@ oauth2Client.setCredentials(tokens);
     where: { userId },
   });
 
-  await prisma.googleCalendarConnection.upsert({
+ const savedConnection = await prisma.googleCalendarConnection.upsert({
     where: { userId },
     update: {
       googleEmail: profile.data.email ?? existing?.googleEmail ?? null,
@@ -147,6 +155,14 @@ oauth2Client.setCredentials(tokens);
         calendarConnected: true,
         calendarPermission: "write",
       },
+    });
+
+    console.log("Google Calendar connection saved", {
+      userId,
+      connectionId: savedConnection.id,
+      hasRefreshToken: Boolean(savedConnection.refreshToken),
+      hasAccessToken: Boolean(savedConnection.accessToken),
+      updatedAt: savedConnection.updatedAt,
     });
 
   return {
