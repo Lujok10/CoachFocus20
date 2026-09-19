@@ -271,7 +271,6 @@ app.get("/api/google/status", async (req, res, next) => {
 
     res.json({
       connected: Boolean(connection?.refreshToken),
-      currentScopes,
       hasRefreshToken: Boolean(connection?.refreshToken),
       permission:
         missingScopes.length === 0 && connection?.refreshToken
