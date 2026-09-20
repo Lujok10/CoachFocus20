@@ -555,7 +555,12 @@ app.post(
 app.get("/api/google/auth-url", async (req, res, next) => {
   try {
     const userId = getRequestUserId(req);
-    res.json({ url: getGoogleAuthUrl(userId) });
+    const platform =
+      req.query.platform === "native" ? "native" : undefined;
+
+    res.json({
+      url: getGoogleAuthUrl(userId, platform),
+    });
   } catch (error) {
     next(error);
   }
@@ -600,7 +605,19 @@ app.get("/api/google/callback", async (req, res) => {
       return;
     }
 
-    await handleGoogleCallback(code, state);
+    const isNative = state.endsWith(":native");
+    const userId = isNative
+      ? state.slice(0, -":native".length)
+      : state;
+
+    await handleGoogleCallback(code, userId);
+
+    if (isNative) {
+      res.redirect(
+        "focus20://google-callback?google=connected"
+      );
+      return;
+    }
 
     const frontendUrl =
       process.env.FRONTEND_URL ?? "http://localhost:5173";

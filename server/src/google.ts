@@ -35,14 +35,22 @@ export function getOAuthClient() {
   );
 }
 
-export function getGoogleAuthUrl(userId: string) {
+export function getGoogleAuthUrl(
+  userId: string,
+  platform?: "native"
+) {
   const oauth2Client = getOAuthClient();
+
+  const state =
+    platform === "native"
+      ? `${userId}:native`
+      : userId;
 
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
     scope: GOOGLE_CALENDAR_SCOPES,
-    state: userId,
+    state,
   });
 }
 

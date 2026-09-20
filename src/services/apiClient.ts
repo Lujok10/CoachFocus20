@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import { UserRules, WakePlan } from "../types";
 
 const API_BASE_URL = (
@@ -93,7 +94,10 @@ export async function apiHealth() {
 }
 
 export async function getGoogleConnectUrl() {
-  const data = await request<{ url: string }>("/api/google/auth-url");
+  const platform = Capacitor.isNativePlatform() ? "?platform=native" : "";
+  const data = await request<{ url: string }>(
+    `/api/google/auth-url${platform}`
+  );
   return data.url;
 }
 
