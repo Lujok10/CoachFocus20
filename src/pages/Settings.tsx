@@ -158,10 +158,14 @@ function Toggle({
 
 type SettingsProps = {
   onOpenHelp: () => void;
+  onOpenRecommendedTools: () => void;
 };
 
 
-export function Settings({ onOpenHelp }: SettingsProps) {
+export function Settings({
+    onOpenHelp,
+    onOpenRecommendedTools,
+  }: SettingsProps) {
   const [rules, setRules] = useState<Rules>(defaultRules);
   const [backendOnline, setBackendOnline] = useState(false);
   const [googleConnectUrl, setGoogleConnectUrl] = useState("");
@@ -657,43 +661,52 @@ export function Settings({ onOpenHelp }: SettingsProps) {
             </Section>
 
             <Section title="Mobile App">
-            <Row
-              icon={Smartphone}
-              label="Install Focus20"
-              description="Add Focus20 to your home screen as a PWA"
-            >
-              {canInstall ? (
+              <Row
+                icon={Smartphone}
+                label="Install Focus20"
+                description="Add Focus20 to your home screen as a PWA"
+              >
+                {canInstall ? (
+                  <button
+                    onClick={install}
+                    className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white"
+                  >
+                    Install
+                  </button>
+                ) : (
+                  <span className="text-xs text-slate-400">
+                    Available after visit
+                  </span>
+                )}
+              </Row>
+
+              <div className="mt-4 space-y-3">
                 <button
-                  onClick={install}
-                  className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white"
+                  type="button"
+                  onClick={onOpenRecommendedTools}
+                  className="w-full rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 hover:bg-emerald-100"
                 >
-                  Install
+                  Recommended Tools
                 </button>
-              ) : (
-                <span className="text-xs text-slate-400">
-                  Available after visit
-                </span>
-              )}
-            </Row>
 
-            <div className="mt-4 space-y-3">
-            <button
-              onClick={resetOnboarding}
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Replay Onboarding
-            </button>
+                <button
+                  type="button"
+                  onClick={resetOnboarding}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Replay Onboarding
+                </button>
 
-            <button
-              type="button"
-              onClick={onOpenHelp}
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Open Help & Privacy
-            </button>
-          </div>
-          </Section>
-         
+                <button
+                  type="button"
+                  onClick={onOpenHelp}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Open Help & Privacy
+                </button>
+              </div>
+            </Section>
+            
         <Section title="Preferences" icon={<PlugZap className="h-4 w-4" />}>
         <div className="space-y-4">
           <div className="rounded-2xl bg-slate-50 p-4">

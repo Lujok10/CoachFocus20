@@ -5,6 +5,7 @@ import { unlockAudio } from "./services/sounds";
 import { Calendar } from "./pages/Calendar";
 import { Insights } from "./pages/Insights";
 import { Settings } from "./pages/Settings";
+import { RecommendedTools } from "./pages/RecommendedTools";
 import { AdminAnalytics } from "./pages/AdminAnalytics";
 import { Help } from "./pages/Help";
 import { Privacy } from "./pages/Privacy";
@@ -35,7 +36,8 @@ export type TabType =
   | "help"
   | "privacy"
   | "terms"
-  | "admin-analytics";
+  | "admin-analytics"
+  | "recommended-tools";
 
 export default function App() {
   if (window.location.pathname === "/delete-account") {
@@ -351,9 +353,15 @@ if (error) {
             {activeTab === "privacy" && (
               <Privacy onBack={() => setActiveTab("help")} />
             )}
+            {activeTab === "recommended-tools" && (
+              <RecommendedTools onBack={() => setActiveTab("settings")} />
+            )}
 
           {activeTab === "settings" && (
-            <Settings onOpenHelp={() => setActiveTab("help")} />
+            <Settings
+              onOpenHelp={() => setActiveTab("help")}
+              onOpenRecommendedTools={() => setActiveTab("recommended-tools")}
+            />
               )}
 
               {activeTab === "terms" && (
